@@ -3,12 +3,14 @@ name: orbit-cards
 description: >-
   Generate shareable X (Twitter) headers, profile picture rings, "My orbit"
   interaction circles, monthly recaps, shout-out cards, post cards, Time Machine
-  cards, milestones, thanks cards, and trophies for any public X @handle or X
-  post URL. Reads public X data free with no API key or login via FxTwitter
-  (with VxTwitter profile fallback) and renders 264 designs (628 looks) to PNG
-  or SVG locally. Use whenever the user asks to make an X header, Twitter
-  banner, orbit card, follower circle, monthly X recap, profile ring, shout-out
-  card, post-to-image card, milestone card, or Orbit Cards graphic.
+  cards, milestones, follower mosaic thank-you photos (spelling any text like
+  "2000" or "THANK YOU" out of circular follower avatars), thanks cards, and
+  trophies for any public X @handle or X post URL. Reads public X data free with
+  no API key or login via FxTwitter (with VxTwitter profile fallback) and
+  renders 265 designs (631 looks) to PNG or SVG locally. Use whenever the user
+  asks to make an X header, Twitter banner, orbit card, follower circle,
+  follower thank-you mosaic, monthly X recap, profile ring, shout-out card,
+  post-to-image card, milestone card, or Orbit Cards graphic.
 ---
 
 # Orbit Cards
@@ -40,7 +42,7 @@ node "$SKILL_DIR/scripts/orbit-cards.mjs" inspect @handle        # shows followe
 
 ### 2. Choose Designs
 
-There are **10 sets** (264 designs, 628 looks):
+There are **10 sets** (265 designs, 631 looks):
 
 | Set ID | What it makes | Default size |
 | :--- | :--- | :--- |
@@ -52,7 +54,7 @@ There are **10 sets** (264 designs, 628 looks):
 | `circle` | "My orbit" interaction maps (Dinner table, Tarot, Name tags, …) | `square` |
 | `timemachine` | 12-month & 1-year-ago comparisons | `square` |
 | `milestone` | Follower, view, and streak milestone cards | `square` |
-| `thanks` | Follower thank-you cards (Welcome mat, Receipt, Guestbook, …) | `square` |
+| `thanks` | Follower thank-you cards (Follower mosaic, Welcome mat, Receipt, Guestbook, …) | `square` |
 | `achievement` | Trophies, enamel pins, gold records | `square` |
 
 For the full list of card IDs, look indices, and sizes, read [designs.md](./references/designs.md) or run:
@@ -82,6 +84,13 @@ node "$SKILL_DIR/scripts/orbit-cards.mjs" render \
   --post-url "https://x.com/user/status/1234567890" \
   --card post-classic --out ./post.png
 
+# Follower mosaic thank-you photo (spells any text out of circular follower avatars with A-Z / 1-N coordinates)
+node "$SKILL_DIR/scripts/orbit-cards.mjs" render --handle @handle \
+  --card thanks-mosaic --text "2000" --scale 2 --out ./thanks-2000.png
+
+node "$SKILL_DIR/scripts/orbit-cards.mjs" render --handle @handle \
+  --card thanks-mosaic --text "THANK YOU" --scale 2 --out ./thank-you.png
+
 # Shout-out for a specific person, or custom copy
 node "$SKILL_DIR/scripts/orbit-cards.mjs" render --handle @handle \
   --card shout-number-one --person @friend --no-mark --out ./shout.png
@@ -92,7 +101,7 @@ node "$SKILL_DIR/scripts/orbit-cards.mjs" render --handle @handle \
 - **Input:** `--handle @user`, `--post-url <url|id>`, `--snapshot <file.json>`, `--refresh` (bypass 24h cache), `--fast` (light read), `--tz <IANA>`
 - **Selection:** `--card <id[:look]>` (repeatable/comma-separated), `--set <setId>` (with optional `--all-looks`), `--pack`, `--picks <picks.json>`
 - **Output:** `--out <dir-or-file>`, `--format png|svg`, `--scale 1|2`, `--size square|portrait|story|landscape|header`, `--json`
-- **Customization:** `--look <n>`, `--who mix|orbit|followers`, `--period 7|30|90`, `--person @handle`, `--post <postId>`, `--title`, `--subtitle`, `--line`, `--date YYYY-MM-DD`, `--ring-text`, `--full-circle`, `--accent #RRGGBB`, `--shape circle|rounded|square`, `--border none|ring|shadow`, `--grain`, `--hide-names`, `--no-handles`, `--no-numbers`, `--no-mark`, `--seed <n>`, `--people-count <n>`, `--people-order closeness|colour|random`, `--include h1,h2`, `--exclude h1,h2`
+- **Customization:** `--look <n>` (for `thanks-mosaic`: `0`=Dark, `1`=Light, `2`=Midnight), `--who mix|orbit|followers`, `--period 7|30|90`, `--person @handle`, `--post <postId>`, `--title`, `--subtitle`, `--text` / `--line` (custom text for text-led designs & `thanks-mosaic`, e.g. `"2000"` or `"THANK YOU"`), `--followers <n|all>` (max followers to paginate, default `600` for `thanks-mosaic`, or `all` for every follower), `--date YYYY-MM-DD`, `--ring-text`, `--full-circle`, `--accent #RRGGBB`, `--shape circle|rounded|square`, `--border none|ring|shadow`, `--grain`, `--hide-names`, `--no-handles`, `--no-numbers` (also hides A-Z / 1-N coordinates on `thanks-mosaic`), `--no-mark`, `--seed <n>`, `--people-count <n>`, `--people-order closeness|colour|random`, `--include h1,h2`, `--exclude h1,h2`
 
 ## Verification
 

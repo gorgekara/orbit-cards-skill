@@ -1,7 +1,7 @@
 # Orbit Cards Design Catalog
 
 Every public set, design, card ID, look (`cardId:colour` or `cardId` when `colour=0`), and supported size.
-Total: **264 designs** (**628 looks**) across **10 sets**.
+Total: **265 designs** (**631 looks**) across **10 sets**.
 
 
 ## X header (`--set header`) — 25 designs, 78 looks
@@ -265,7 +265,7 @@ Total: **264 designs** (**628 looks**) across **10 sets**.
 | **Meme: Nobody** | `milestone-meme-nobody` (Classic), `milestone-meme-nobody:1` (Dark mode), `milestone-meme-nobody:2` (Deep fried) | square, portrait, story |
 | **Meme: Galaxy brain** | `milestone-meme-brain` (Dark mode), `milestone-meme-brain:1` (Classic), `milestone-meme-brain:2` (Deep fried) | square, portrait, story |
 
-## Thanks (`--set thanks`) — 21 designs, 71 looks
+## Thanks (`--set thanks`) — 22 designs, 74 looks
 
 | Design | Card IDs & Looks | Sizes |
 | :--- | :--- | :--- |
@@ -289,6 +289,7 @@ Total: **264 designs** (**628 looks**) across **10 sets**.
 | **New players** | `thanks-players` (Pop), `thanks-players:1` (Night), `thanks-players:2` (Paper) | square, portrait, story |
 | **Bouquet** | `thanks-bouquet` (Pop), `thanks-bouquet:1` (Night), `thanks-bouquet:2` (Paper) | square, portrait, story |
 | **Chalkboard** | `thanks-chalkboard` (Pop), `thanks-chalkboard:1` (Night), `thanks-chalkboard:2` (Paper) | square, portrait, story |
+| **Follower mosaic** | `thanks-mosaic` (Dark), `thanks-mosaic:1` (Light), `thanks-mosaic:2` (Midnight) | square, landscape, portrait, header |
 | **Unboxed: Newest people** | `thanks-unboxed` (Bubblegum), `thanks-unboxed:1` (Lemon), `thanks-unboxed:2` (Midnight) | square, portrait, story, landscape |
 
 ## Trophies (`--set achievement`) — 22 designs, 52 looks

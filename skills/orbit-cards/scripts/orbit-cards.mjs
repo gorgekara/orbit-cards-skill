@@ -335,8 +335,20 @@ async function inlineImages(props, fetcher2 = fetch) {
   let found = new Map(await Promise.all([...urls].map(async (u) => [u, await fetchData(u, fetcher2)]))), swap = (v, key2) => typeof v == "string" ? found.has(v) ? found.get(v) : IMAGE_KEY.test(key2) && isHttp(v) ? null : v : Array.isArray(v) ? v.map((x) => swap(x, key2)) : isPlain(v) ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, swap(x, k)])) : v;
   return swap(props, "");
 }
+var customSampler = null;
+function setAvatarSampler(fn) {
+  customSampler = fn;
+}
 async function avatarColour(dataUri) {
-  if (!dataUri || typeof document > "u") return null;
+  if (!dataUri) return null;
+  if (typeof document > "u") {
+    if (!customSampler) return null;
+    try {
+      return await customSampler(dataUri);
+    } catch {
+      return null;
+    }
+  }
   try {
     let img = new Image();
     img.src = dataUri, await img.decode();
@@ -12804,13 +12816,427 @@ var TROPHY2_CARDS = [
   ach("crystal", "Crystal", "cool", CrystalCard)
 ];
 
+// src/lib/cards/new/mosaic.tsx
+var mosaic_exports = {};
+__export(mosaic_exports, {
+  MOSAIC_CARDS: () => MOSAIC_CARDS,
+  splitMosaicLines: () => splitMosaicLines
+});
+import { jsx as jsx85, jsxs as jsxs85 } from "react/jsx-runtime";
+var FONT_5X7 = {
+  0: [" ### ", "## ##", "## ##", "## ##", "## ##", "## ##", " ### "],
+  1: ["  ## ", " ### ", "  ## ", "  ## ", "  ## ", "  ## ", "#####"],
+  2: [" ### ", "## ##", "   ##", "  ## ", " ##  ", "##   ", "#####"],
+  3: ["#### ", "   ##", "   ##", " ### ", "   ##", "   ##", "#### "],
+  4: ["## ##", "## ##", "## ##", "#####", "   ##", "   ##", "   ##"],
+  5: ["#####", "##   ", "#### ", "   ##", "   ##", "## ##", " ### "],
+  6: [" ### ", "##   ", "#### ", "## ##", "## ##", "## ##", " ### "],
+  7: ["#####", "   ##", "  ## ", "  ## ", " ##  ", " ##  ", " ##  "],
+  8: [" ### ", "## ##", "## ##", " ### ", "## ##", "## ##", " ### "],
+  9: [" ### ", "## ##", "## ##", " ####", "   ##", "   ##", " ### "],
+  A: [" ### ", "## ##", "## ##", "#####", "## ##", "## ##", "## ##"],
+  B: ["#### ", "## ##", "## ##", "#### ", "## ##", "## ##", "#### "],
+  C: [" ### ", "## ##", "##   ", "##   ", "##   ", "## ##", " ### "],
+  D: ["#### ", "## ##", "## ##", "## ##", "## ##", "## ##", "#### "],
+  E: ["#####", "##   ", "##   ", "#### ", "##   ", "##   ", "#####"],
+  F: ["#####", "##   ", "##   ", "#### ", "##   ", "##   ", "##   "],
+  G: [" ### ", "## ##", "##   ", "## ##", "## ##", "## ##", " ####"],
+  H: ["## ##", "## ##", "## ##", "#####", "## ##", "## ##", "## ##"],
+  I: ["#####", "  #  ", "  #  ", "  #  ", "  #  ", "  #  ", "#####"],
+  J: ["  ###", "   ##", "   ##", "   ##", "## ##", "## ##", " ### "],
+  K: ["## ##", "## ##", "#### ", "###  ", "#### ", "## ##", "## ##"],
+  L: ["##   ", "##   ", "##   ", "##   ", "##   ", "##   ", "#####"],
+  M: ["#   #", "## ##", "#####", "## ##", "## ##", "## ##", "## ##"],
+  N: ["## ##", "### #", "#####", "# ###", "## ##", "## ##", "## ##"],
+  O: [" ### ", "## ##", "## ##", "## ##", "## ##", "## ##", " ### "],
+  P: ["#### ", "## ##", "## ##", "#### ", "##   ", "##   ", "##   "],
+  Q: [" ### ", "## ##", "## ##", "## ##", "## ##", "## ##", " ####"],
+  R: ["#### ", "## ##", "## ##", "#### ", "## ##", "## ##", "## ##"],
+  S: [" ####", "##   ", "##   ", " ### ", "   ##", "   ##", "#### "],
+  T: ["#####", "  #  ", "  #  ", "  #  ", "  #  ", "  #  ", "  #  "],
+  U: ["## ##", "## ##", "## ##", "## ##", "## ##", "## ##", " ### "],
+  V: ["## ##", "## ##", "## ##", "## ##", "## ##", " ### ", "  #  "],
+  W: ["## ##", "## ##", "## ##", "## ##", "#####", "#####", "## ##"],
+  X: ["## ##", "## ##", " ### ", "  #  ", " ### ", "## ##", "## ##"],
+  Y: ["## ##", "## ##", "## ##", " ### ", "  #  ", "  #  ", "  #  "],
+  Z: ["#####", "   ##", "  ## ", " ##  ", "##   ", "##   ", "#####"],
+  "!": ["  #  ", "  #  ", "  #  ", "  #  ", "  #  ", "     ", "  #  "],
+  "+": ["     ", "  #  ", "  #  ", "#####", "  #  ", "  #  ", "     "],
+  "-": ["     ", "     ", "     ", "#####", "     ", "     ", "     "],
+  ".": ["     ", "     ", "     ", "     ", "     ", "  ## ", "  ## "],
+  ",": ["     ", "     ", "     ", "     ", "  ## ", "  ## ", " ##  "],
+  "?": [" ### ", "## ##", "   ##", "  ## ", "  #  ", "     ", "  #  "],
+  "&": [" ##  ", "#  # ", " ##  ", "## # ", "#  ##", "#  # ", " ## #"],
+  "#": [" # # ", "#####", " # # ", " # # ", "#####", " # # ", "     "],
+  "%": ["##  #", "## # ", "  #  ", " #   ", " # ##", "#  ##", "     "],
+  "\u2665": [" # # ", "#####", "#####", "#####", " ### ", "  #  ", "     "],
+  " ": ["  ", "  ", "  ", "  ", "  ", "  ", "  "]
+}, FONT_4X6 = {
+  0: [" ## ", "#  #", "#  #", "#  #", "#  #", " ## "],
+  1: [" ## ", "  # ", "  # ", "  # ", "  # ", " ###"],
+  2: ["### ", "   #", " ## ", "#   ", "#   ", "####"],
+  3: ["### ", "   #", " ## ", "   #", "   #", "### "],
+  4: ["#  #", "#  #", "####", "   #", "   #", "   #"],
+  5: ["####", "#   ", "### ", "   #", "   #", "### "],
+  6: [" ## ", "#   ", "### ", "#  #", "#  #", " ## "],
+  7: ["####", "   #", "  # ", " #  ", " #  ", " #  "],
+  8: [" ## ", "#  #", " ## ", "#  #", "#  #", " ## "],
+  9: [" ## ", "#  #", " ###", "   #", "   #", " ## "],
+  A: [" ## ", "#  #", "####", "#  #", "#  #", "#  #"],
+  B: ["### ", "#  #", "### ", "#  #", "#  #", "### "],
+  C: [" ###", "#   ", "#   ", "#   ", "#   ", " ###"],
+  D: ["### ", "#  #", "#  #", "#  #", "#  #", "### "],
+  E: ["####", "#   ", "### ", "#   ", "#   ", "####"],
+  F: ["####", "#   ", "### ", "#   ", "#   ", "#   "],
+  G: [" ###", "#   ", "# ##", "#  #", "#  #", " ###"],
+  H: ["#  #", "#  #", "####", "#  #", "#  #", "#  #"],
+  I: ["###", " # ", " # ", " # ", " # ", "###"],
+  J: ["  ##", "   #", "   #", "#  #", "#  #", " ## "],
+  K: ["#  #", "# # ", "##  ", "# # ", "#  #", "#  #"],
+  L: ["#   ", "#   ", "#   ", "#   ", "#   ", "####"],
+  M: ["#   #", "## ##", "# # #", "#   #", "#   #", "#   #"],
+  N: ["#  #", "## #", "####", "# ##", "#  #", "#  #"],
+  O: [" ## ", "#  #", "#  #", "#  #", "#  #", " ## "],
+  P: ["### ", "#  #", "### ", "#   ", "#   ", "#   "],
+  Q: [" ## ", "#  #", "#  #", "# ##", "#  #", " ###"],
+  R: ["### ", "#  #", "### ", "# # ", "#  #", "#  #"],
+  S: [" ###", "#   ", " ## ", "   #", "   #", "### "],
+  T: ["###", " # ", " # ", " # ", " # ", " # "],
+  U: ["#  #", "#  #", "#  #", "#  #", "#  #", " ## "],
+  V: ["#  #", "#  #", "#  #", "#  #", " ## ", " ## "],
+  W: ["#   #", "#   #", "#   #", "# # #", "#####", "#   #"],
+  X: ["#  #", "#  #", " ## ", " ## ", "#  #", "#  #"],
+  Y: ["#  #", "#  #", " ## ", "  # ", "  # ", "  # "],
+  Z: ["####", "  # ", " #  ", "#   ", "#   ", "####"],
+  "!": ["#", "#", "#", "#", " ", "#"],
+  "+": ["   ", " # ", "###", " # ", "   ", "   "],
+  "-": ["   ", "   ", "###", "   ", "   ", "   "],
+  ".": ["  ", "  ", "  ", "  ", "##", "##"],
+  ",": ["  ", "  ", "  ", " #", " #", "# "],
+  "?": ["### ", "   #", " ## ", " #  ", "    ", " #  "],
+  "\u2665": [" # # ", "#####", "#####", " ### ", "  #  ", "     "],
+  " ": ["  ", "  ", "  ", "  ", "  ", "  "]
+};
+function stretchTo11(rows) {
+  return [
+    rows[0],
+    rows[0],
+    rows[1],
+    rows[1],
+    rows[2],
+    rows[3],
+    rows[3],
+    rows[4],
+    rows[5],
+    rows[6],
+    rows[6]
+  ];
+}
+function stretch6To8(rows) {
+  return [rows[0], rows[1], rows[1], rows[2], rows[3], rows[4], rows[4], rows[5]];
+}
+function splitMosaicLines(raw) {
+  let cleaned = raw.trim().replace(/<3/g, "\u2665").toUpperCase();
+  if (!cleaned) return ["500"];
+  if (cleaned.includes(`
+`))
+    return cleaned.split(/\n+/).map((l) => l.trim()).filter(Boolean).slice(0, 3);
+  let words2 = cleaned.split(/\s+/).filter(Boolean);
+  if (words2.length <= 1) return [cleaned.slice(0, 10)];
+  if (cleaned.length <= 6) return [cleaned];
+  if (words2.length === 2) return words2.map((w) => w.slice(0, 10));
+  let mid = Math.ceil(words2.length / 2);
+  return [words2.slice(0, mid).join(" ").slice(0, 10), words2.slice(mid).join(" ").slice(0, 10)];
+}
+function defaultMosaicText(followers) {
+  if (!Number.isFinite(followers) || followers <= 0) return "THANK YOU";
+  if (followers < 1e4) return String(followers);
+  if (followers < 1e6) {
+    let k = followers / 1e3;
+    return `${k >= 100 ? Math.round(k) : Number(k.toFixed(1))}K`;
+  }
+  return `${Number((followers / 1e6).toFixed(1))}M`;
+}
+function rasterizeLines(lines, compact2, tall) {
+  let font = compact2 ? FONT_4X6 : FONT_5X7, fallback = font[" "] ?? ["  ", "  ", "  ", "  ", "  ", "  "], gapX = 1, gapY = 2, renderedLines = lines.map((line2) => {
+    let glyphs = [...line2].map((ch) => {
+      let g = font[ch] ?? fallback;
+      return !compact2 && tall ? stretchTo11(g) : compact2 && lines.length === 2 ? stretch6To8(g) : g;
+    }), h = glyphs[0]?.length ?? (compact2 ? 6 : tall ? 11 : 7), rows = Array.from({ length: h }, () => []);
+    return glyphs.forEach((g, gi) => {
+      if (gi > 0) for (let r = 0; r < h; r++) for (let k = 0; k < gapX; k++) rows[r].push(!1);
+      for (let r = 0; r < h; r++)
+        for (let ch of g[r] ?? "") rows[r].push(ch === "#");
+    }), rows;
+  }), maxW = Math.max(1, ...renderedLines.map((l) => l[0]?.length ?? 0)), mask = [];
+  return renderedLines.forEach((lineRows, li) => {
+    if (li > 0) for (let g = 0; g < gapY; g++) mask.push(Array(maxW).fill(!1));
+    let w = lineRows[0]?.length ?? 0, padL = Math.floor((maxW - w) / 2), padR = maxW - w - padL;
+    for (let r of lineRows)
+      mask.push([...Array(padL).fill(!1), ...r, ...Array(padR).fill(!1)]);
+  }), mask;
+}
+function colLabel(i) {
+  let n = i, out = "";
+  do
+    out = String.fromCharCode(65 + n % 26) + out, n = Math.floor(n / 26) - 1;
+  while (n >= 0);
+  return out;
+}
+var MOSAIC_FETCH_TIMEOUT_MS = 5e3, MOSAIC_MAX_BYTES = 512 * 1024, ALLOWED_TYPES = ["image/png", "image/jpeg"];
+function mosaicAvatarUrl(url) {
+  if (url.startsWith("/demo/")) return url;
+  let u = new URL(url);
+  return u.pathname = u.pathname.replace(/_(normal|400x400|mini)(\.(jpe?g|png))$/i, "_bigger$2"), `${(import.meta.env?.PUBLIC_POCKETBASE_URL ?? "").replace(/\/$/, "")}/api/avatar?u=${encodeURIComponent(u.toString())}`;
+}
+function bytesToBase64(bytes) {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 32768) bin += String.fromCharCode(...bytes.subarray(i, i + 32768));
+  return btoa(bin);
+}
+async function fetchSmallAvatar(url) {
+  if (!ALLOWED_IMAGE(url)) return null;
+  if (url.startsWith("/demo/")) return avatarData(url);
+  let ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), MOSAIC_FETCH_TIMEOUT_MS);
+  try {
+    let res = await fetch(mosaicAvatarUrl(url), { signal: ctl.signal, redirect: "error" }), type = (res.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+    if (!res.ok || !ALLOWED_TYPES.includes(type)) return avatarData(url);
+    let bytes = new Uint8Array(await res.arrayBuffer());
+    return !bytes.byteLength || bytes.byteLength > MOSAIC_MAX_BYTES ? null : `data:${type};base64,${bytesToBase64(bytes)}`;
+  } catch {
+    return avatarData(url);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+async function mapLimit(items, limit, fn) {
+  let out = new Array(items.length), next = 0;
+  return await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, async () => {
+      for (; next < items.length; ) {
+        let i = next++;
+        out[i] = await fn(items[i]);
+      }
+    })
+  ), out;
+}
+async function loadMosaic(_ctx, params) {
+  let snap = cardData(), seen = /* @__PURE__ */ new Set(), ownerHandle = snap.owner.handle.toLowerCase(), candidates2 = [], add = (u) => {
+    if (!u.handle || !u.avatar || !ALLOWED_IMAGE(u.avatar)) return;
+    let h = u.handle.toLowerCase();
+    if (h === ownerHandle || seen.has(h)) return;
+    seen.add(h);
+    let isDefault = /default_profile_images/i.test(u.avatar);
+    candidates2.push({ handle: u.handle, avatar: u.avatar, isDefault });
+  };
+  for (let f of snap.followers) add(f);
+  for (let f of snap.newFollowers) add(f);
+  for (let p of snap.people) add(p);
+  let real = candidates2.filter((c) => !c.isDefault), pool2 = (real.length >= 24 ? real : candidates2).slice(0, 1e3);
+  if (pool2.length < 8)
+    return { unavailable: "Follower mosaic needs at least 8 followers or orbit people with profile photos." };
+  let avatars = (await mapLimit(pool2, 20, async (c) => {
+    let dataUri = await fetchSmallAvatar(c.avatar);
+    if (!dataUri) return null;
+    let rgb = await avatarColour2(dataUri), lum3 = rgb ? luma(rgb) : 0.5;
+    return { handle: c.handle, avatar: dataUri, luma: lum3 };
+  })).filter((x) => x !== null);
+  if (avatars.length < 8)
+    return { unavailable: "Could not load enough follower photos for the mosaic." };
+  let text2 = (params.line ?? "").trim() || defaultMosaicText(snap.owner.followers), colour = Number.parseInt(params.color ?? "0", 10), seed = Math.max(0, Math.floor(Number(params.seed) || 0)) % 1e6;
+  return {
+    text: text2,
+    avatars,
+    totalFollowers: snap.owner.followers,
+    colour: Number.isFinite(colour) && colour >= 0 ? colour : 0,
+    seed,
+    mark: showMark(params),
+    coords: params.numbers !== "0"
+  };
+}
+function pickNoNeighbor(pool2, cursor, grid, r, c) {
+  let neighbors = /* @__PURE__ */ new Set();
+  for (let [dr, dc] of [[-1, 0], [0, -1], [-1, -1], [-1, 1], [-2, 0], [0, -2]]) {
+    let nb = grid[r + dr]?.[c + dc];
+    nb && neighbors.add(nb.handle);
+  }
+  let n = pool2.length;
+  for (let tries = 0; tries < Math.min(n, 16); tries++) {
+    let cand = pool2[(cursor.i + tries) % n];
+    if (!neighbors.has(cand.handle))
+      return cursor.i = (cursor.i + tries + 1) % n, cand;
+  }
+  let fallback = pool2[cursor.i % n];
+  return cursor.i = (cursor.i + 1) % n, fallback;
+}
+function shuffleWith(xs, rnd) {
+  let a = [...xs];
+  for (let i = a.length - 1; i > 0; i--) {
+    let j = Math.floor(rnd() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+var PALETTES = [
+  { name: "Dark", bg: "#070709", frame: "#0D0D11", coord: "rgba(255,255,255,0.46)", dark: !0 },
+  { name: "Light", bg: "#F5F2EB", frame: "#ECE8DF", coord: "rgba(24,20,16,0.46)", dark: !1 },
+  { name: "Midnight", bg: "#080D1B", frame: "#0E162B", coord: "rgba(180,205,255,0.46)", dark: !0 }
+];
+function MosaicCard3(p, size) {
+  let { width: W4, height: H4 } = CARD_PX[size], pal = PALETTES[p.colour] ?? PALETTES[0], lines = splitMosaicLines(p.text), longest = Math.max(...lines.map((l) => l.length)), compact2 = lines.length > 1 || longest > 4, tall = !compact2 && longest <= 4, mask = rasterizeLines(lines, compact2, tall), textH = mask.length, textW = mask[0]?.length ?? 1, padOuter = size === "header" ? 16 : 22, labelLeft = p.coords ? size === "header" ? 24 : 28 : 0, labelTop = p.coords ? size === "header" ? 20 : 24 : 0, availW = W4 - padOuter * 2 - labelLeft, availH = H4 - padOuter * 2 - labelTop, padCols = size === "header" ? 4 : 3, padRows = size === "header" ? 2 : 3, minCols = Math.max(size === "header" ? 34 : 25, textW + padCols * 2), minRows = Math.max(size === "header" ? 11 : 18, textH + padRows * 2), step = Math.floor(Math.min(availW / minCols, availH / minRows)), cols = Math.min(Math.max(minCols, Math.floor(availW / step)), 44), rows = Math.min(Math.max(minRows, Math.floor(availH / step)), 34), gap = step >= 34 ? 3 : 2, d = Math.max(12, step - gap), gridW = cols * step - gap, gridH = rows * step - gap, originX = Math.round(padOuter + labelLeft + (availW - gridW) / 2), originY = Math.round(padOuter + labelTop + (availH - gridH) / 2), offC = Math.floor((cols - textW) / 2), offR = Math.floor((rows - textH) / 2), isText = (r, c) => {
+    let mr = r - offR, mc = c - offC;
+    return mr >= 0 && mr < textH && mc >= 0 && mc < textW && !!mask[mr][mc];
+  }, haloPadR = size === "header" ? 1 : 2, haloPadC = 2, zones = Array.from(
+    { length: rows },
+    (_, r) => Array.from({ length: cols }, (_2, c) => isText(r, c) ? "text" : r >= offR - haloPadR && r < offR + textH + haloPadR && c >= offC - haloPadC && c < offC + textW + haloPadC ? "halo" : "outer")
+  ), byLuma = [...p.avatars].sort((a, b) => b.luma - a.luma), n = byLuma.length, pureBright = byLuma.filter((a) => a.luma >= 0.68), pureDark = byLuma.filter((a) => a.luma <= 0.25), brightCount = Math.min(20, Math.max(8, pureBright.length, Math.round(n * 0.08))), darkCount = Math.min(34, Math.max(12, pureDark.length, Math.round(n * 0.14))), brightest = byLuma.slice(0, Math.min(n, brightCount)), darkest = byLuma.slice(Math.max(0, n - darkCount)), middle = byLuma.slice(Math.min(brightCount, n), Math.max(brightCount, n - darkCount)), rnd = seeded(p.seed * 7919 + 42), textPool = shuffleWith(pal.dark ? brightest : darkest, rnd), haloPool = shuffleWith(pal.dark ? darkest : brightest, rnd), outerBase = middle.length >= 12 ? [...shuffleWith(middle, rnd), ...shuffleWith(byLuma, rnd)] : shuffleWith(byLuma, rnd), textCur = { i: 0 }, haloCur = { i: 0 }, outerCur = { i: 0 }, placed = Array.from({ length: rows }, () => Array(cols).fill(null)), cells = [];
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++) {
+      let zone = zones[r][c], av = zone === "text" ? pickNoNeighbor(textPool, textCur, placed, r, c) : zone === "halo" ? pickNoNeighbor(haloPool, haloCur, placed, r, c) : pickNoNeighbor(outerBase, outerCur, placed, r, c);
+      placed[r][c] = av, cells.push({ r, c, zone, av });
+    }
+  let coordSize = step >= 34 ? 12 : 10;
+  return /* @__PURE__ */ jsxs85(
+    "div",
+    {
+      style: {
+        display: "flex",
+        position: "relative",
+        width: W4,
+        height: H4,
+        background: pal.bg,
+        overflow: "hidden"
+      },
+      children: [
+        p.coords && Array.from({ length: cols }, (_, c) => /* @__PURE__ */ jsx85(
+          "div",
+          {
+            style: {
+              display: "flex",
+              position: "absolute",
+              left: originX + c * step,
+              top: originY - labelTop + 2,
+              width: d,
+              height: labelTop - 4,
+              alignItems: "center",
+              justifyContent: "center",
+              fontFamily: "Mono",
+              fontSize: coordSize,
+              color: pal.coord
+            },
+            children: colLabel(c)
+          },
+          `col-${c}`
+        )),
+        p.coords && Array.from({ length: rows }, (_, r) => /* @__PURE__ */ jsx85(
+          "div",
+          {
+            style: {
+              display: "flex",
+              position: "absolute",
+              left: originX - labelLeft,
+              top: originY + r * step,
+              width: labelLeft - 6,
+              height: d,
+              alignItems: "center",
+              justifyContent: "flex-end",
+              fontFamily: "Mono",
+              fontSize: coordSize,
+              color: pal.coord
+            },
+            children: r + 1
+          },
+          `row-${r}`
+        )),
+        cells.map(({ r, c, zone, av }) => {
+          let x = originX + c * step, y = originY + r * step, veil = null, ring, glow;
+          return zone === "text" ? pal.dark ? (ring = "2px solid rgba(255,255,255,0.88)", glow = "0 0 8px rgba(255,255,255,0.32)", av.luma < 0.82 && (veil = `rgba(255,255,255,${Math.min(0.36, (0.82 - av.luma) * 0.65).toFixed(2)})`)) : (ring = "2px solid rgba(18,16,14,0.85)", av.luma > 0.22 && (veil = `rgba(12,12,16,${Math.min(0.42, (av.luma - 0.22) * 0.65).toFixed(2)})`)) : zone === "halo" && (pal.dark ? veil = `rgba(4,4,8,${Math.min(0.64, Math.max(0.28, 0.28 + Math.max(0, av.luma - 0.14) * 0.85)).toFixed(2)})` : veil = `rgba(245,242,235,${Math.min(0.62, Math.max(0.26, 0.26 + Math.max(0, 0.86 - av.luma) * 0.8)).toFixed(2)})`), /* @__PURE__ */ jsxs85(
+            "div",
+            {
+              style: {
+                display: "flex",
+                position: "absolute",
+                left: x,
+                top: y,
+                width: d,
+                height: d,
+                borderRadius: d,
+                overflow: "hidden",
+                border: ring,
+                boxShadow: glow
+              },
+              children: [
+                /* @__PURE__ */ jsx85(
+                  "img",
+                  {
+                    src: av.avatar,
+                    width: d,
+                    height: d,
+                    alt: "",
+                    style: { width: d, height: d, borderRadius: d, objectFit: "cover" }
+                  }
+                ),
+                veil && /* @__PURE__ */ jsx85(
+                  "div",
+                  {
+                    style: {
+                      display: "flex",
+                      position: "absolute",
+                      left: 0,
+                      top: 0,
+                      width: d,
+                      height: d,
+                      borderRadius: d,
+                      background: veil
+                    }
+                  }
+                )
+              ]
+            },
+            `${r}-${c}`
+          );
+        }),
+        p.mark && /* @__PURE__ */ jsx85(
+          "div",
+          {
+            style: {
+              display: "flex",
+              position: "absolute",
+              right: padOuter,
+              bottom: 6,
+              fontFamily: "Mono",
+              fontSize: 11,
+              color: pal.coord
+            },
+            children: "Made with Orbit Cards"
+          }
+        )
+      ]
+    }
+  );
+}
+var MOSAIC_CARDS = [
+  {
+    id: "thanks-mosaic",
+    group: "thanks",
+    title: "Follower mosaic",
+    vibe: "cool",
+    sizes: ["square", "landscape", "portrait", "header"],
+    colorways: PALETTES.map((p) => p.name),
+    load: loadMosaic,
+    render: (p, size) => MosaicCard3(p, size),
+    caption: (p) => `${p.text} \u2014 thank you to everyone following along! Find yourself in the grid and drop your coordinate (like G12).`,
+    isNew: !0
+  }
+];
+
 // src/lib/cards/new/rings2.tsx
 var rings2_exports = {};
 __export(rings2_exports, {
   RINGS2_CARDS: () => RINGS2_CARDS,
   loadRing2: () => loadRing2
 });
-import { jsx as jsx85, jsxs as jsxs85 } from "react/jsx-runtime";
+import { jsx as jsx86, jsxs as jsxs86 } from "react/jsx-runtime";
 async function loadRing2(ctx, params) {
   let c = ctx, now = c.now ?? /* @__PURE__ */ new Date(), tz = c.tz || "UTC", people = [];
   try {
@@ -12834,45 +13260,45 @@ var rad = (d) => d * Math.PI / 180, pt2 = (r, d, cx = C, cy = C) => [cx + Math.c
   return `M${f1(x0)} ${f1(y0)} A${r} ${r} 0 ${span > 180 ? 1 : 0} 1 ${f1(x1)} ${f1(y1)}`;
 }, num4 = (n) => n.toLocaleString("en-US");
 function Base({ owner, children, bg = "#111" }) {
-  return /* @__PURE__ */ jsxs85("div", { style: { ...flex6, position: "relative", width: S, height: S, background: bg, overflow: "hidden" }, children: [
+  return /* @__PURE__ */ jsxs86("div", { style: { ...flex6, position: "relative", width: S, height: S, background: bg, overflow: "hidden" }, children: [
     owner.avatar && photo(owner.avatar, 0, 0, S, S, 0),
     children
   ] });
 }
-var Svg = ({ children, w = S, h = S, x = 0, y = 0 }) => /* @__PURE__ */ jsx85("svg", { width: w, height: h, viewBox: `0 0 ${w} ${h}`, style: { position: "absolute", left: x, top: y }, children }), Vignette = ({ a = 0.5, from = 0.68, tint = "#000" }) => /* @__PURE__ */ jsxs85(Svg, { children: [
-  /* @__PURE__ */ jsx85("defs", { children: /* @__PURE__ */ jsxs85("radialGradient", { id: "vig", cx: "0.5", cy: "0.5", r: "0.5", children: [
-    /* @__PURE__ */ jsx85("stop", { offset: from, stopColor: tint, stopOpacity: 0 }),
-    /* @__PURE__ */ jsx85("stop", { offset: "1", stopColor: tint, stopOpacity: a })
+var Svg = ({ children, w = S, h = S, x = 0, y = 0 }) => /* @__PURE__ */ jsx86("svg", { width: w, height: h, viewBox: `0 0 ${w} ${h}`, style: { position: "absolute", left: x, top: y }, children }), Vignette = ({ a = 0.5, from = 0.68, tint = "#000" }) => /* @__PURE__ */ jsxs86(Svg, { children: [
+  /* @__PURE__ */ jsx86("defs", { children: /* @__PURE__ */ jsxs86("radialGradient", { id: "vig", cx: "0.5", cy: "0.5", r: "0.5", children: [
+    /* @__PURE__ */ jsx86("stop", { offset: from, stopColor: tint, stopOpacity: 0 }),
+    /* @__PURE__ */ jsx86("stop", { offset: "1", stopColor: tint, stopOpacity: a })
   ] }) }),
-  /* @__PURE__ */ jsx85("rect", { x: 0, y: 0, width: S, height: S, fill: "url(#vig)" })
-] }), sparkle = (x, y, s, color, k = 0) => /* @__PURE__ */ jsx85("path", { d: `M${x} ${y - s} Q${x} ${y} ${x + s} ${y} Q${x} ${y} ${x} ${y + s} Q${x} ${y} ${x - s} ${y} Q${x} ${y} ${x} ${y - s}Z`, fill: color }, `sp${k}`), starPath3 = (x, y, R, r, n = 5, rot = -90) => "M" + Array.from({ length: n * 2 }, (_, i) => pt2(i % 2 ? r : R, rot + i * 180 / n, x, y).map(f1).join(" ")).join(" L") + "Z";
+  /* @__PURE__ */ jsx86("rect", { x: 0, y: 0, width: S, height: S, fill: "url(#vig)" })
+] }), sparkle = (x, y, s, color, k = 0) => /* @__PURE__ */ jsx86("path", { d: `M${x} ${y - s} Q${x} ${y} ${x + s} ${y} Q${x} ${y} ${x} ${y + s} Q${x} ${y} ${x - s} ${y} Q${x} ${y} ${x} ${y - s}Z`, fill: color }, `sp${k}`), starPath3 = (x, y, R, r, n = 5, rot = -90) => "M" + Array.from({ length: n * 2 }, (_, i) => pt2(i % 2 ? r : R, rot + i * 180 / n, x, y).map(f1).join(" ")).join(" L") + "Z";
 function OrbitRing(p, o) {
   let t = [
     { a: "#FFD23F", b: "#FF5A36", rim: "#FFFFFF", band: "rgba(18,12,36,0.82)", ink: "#FFD23F", dot: "#FFD23F" },
     { a: "#FFFFFF", b: "#E9DDFF", rim: "#FFFFFF", band: "rgba(255,255,255,0.88)", ink: "#3B2A6B", dot: "#FFFFFF" },
     { a: "#FFFFFF", b: "#8A8A8A", rim: "#111111", band: "#111111", ink: "#FFFFFF", dot: "#FFFFFF" }
   ][p.colour], R = 462, d = 132, ppl = p.people.slice(0, 8), n = ppl.length, a0 = 156, a1 = 384, step = n > 1 ? (a1 - a0) / (n - 1) : 0, at4 = (i) => n > 1 ? a0 + i * step : 270, label2 = p.ringText || `MY ORBIT \xB7 ${n} FAVOURITES`;
-  return /* @__PURE__ */ jsxs85(Base, { owner: o, children: [
-    /* @__PURE__ */ jsx85(Vignette, { a: 0.35, from: 0.74 }),
-    /* @__PURE__ */ jsxs85(Svg, { children: [
-      /* @__PURE__ */ jsx85("defs", { children: /* @__PURE__ */ jsxs85("linearGradient", { id: "orb", x1: "0", y1: "0", x2: "1", y2: "1", children: [
-        /* @__PURE__ */ jsx85("stop", { offset: "0", stopColor: t.a }),
-        /* @__PURE__ */ jsx85("stop", { offset: "1", stopColor: t.b })
+  return /* @__PURE__ */ jsxs86(Base, { owner: o, children: [
+    /* @__PURE__ */ jsx86(Vignette, { a: 0.35, from: 0.74 }),
+    /* @__PURE__ */ jsxs86(Svg, { children: [
+      /* @__PURE__ */ jsx86("defs", { children: /* @__PURE__ */ jsxs86("linearGradient", { id: "orb", x1: "0", y1: "0", x2: "1", y2: "1", children: [
+        /* @__PURE__ */ jsx86("stop", { offset: "0", stopColor: t.a }),
+        /* @__PURE__ */ jsx86("stop", { offset: "1", stopColor: t.b })
       ] }) }),
-      /* @__PURE__ */ jsx85("circle", { cx: C, cy: C, r: R, fill: "none", stroke: "rgba(0,0,0,0.25)", strokeWidth: 9 }),
-      /* @__PURE__ */ jsx85("circle", { cx: C, cy: C, r: R, fill: "none", stroke: "url(#orb)", strokeWidth: 5 }),
-      /* @__PURE__ */ jsx85("circle", { cx: C, cy: C, r: R - 30, fill: "none", stroke: t.a, strokeOpacity: 0.55, strokeWidth: 2, strokeDasharray: "2 12", strokeLinecap: "round" }),
+      /* @__PURE__ */ jsx86("circle", { cx: C, cy: C, r: R, fill: "none", stroke: "rgba(0,0,0,0.25)", strokeWidth: 9 }),
+      /* @__PURE__ */ jsx86("circle", { cx: C, cy: C, r: R, fill: "none", stroke: "url(#orb)", strokeWidth: 5 }),
+      /* @__PURE__ */ jsx86("circle", { cx: C, cy: C, r: R - 30, fill: "none", stroke: t.a, strokeOpacity: 0.55, strokeWidth: 2, strokeDasharray: "2 12", strokeLinecap: "round" }),
       ppl.slice(0, -1).map((_, i) => {
         let [x, y] = pt2(R, at4(i) + step / 2);
-        return /* @__PURE__ */ jsx85("circle", { cx: x, cy: y, r: i % 2 ? 6 : 9, fill: t.dot, stroke: "rgba(0,0,0,0.3)", strokeWidth: 2 }, i);
+        return /* @__PURE__ */ jsx86("circle", { cx: x, cy: y, r: i % 2 ? 6 : 9, fill: t.dot, stroke: "rgba(0,0,0,0.3)", strokeWidth: 2 }, i);
       }),
-      /* @__PURE__ */ jsx85("path", { d: arc(470, ...bandFor(label2, 470, 38, 40, 140, 124)), fill: "none", stroke: t.band, strokeWidth: 62, strokeLinecap: "round" })
+      /* @__PURE__ */ jsx86("path", { d: arc(470, ...bandFor(label2, 470, 38, 40, 140, 124)), fill: "none", stroke: t.band, strokeWidth: 62, strokeLinecap: "round" })
     ] }),
     ppl.map((x, i) => {
       let [cx, cy] = pt2(R, at4(i));
       return photo(x.avatar, cx - d / 2, cy - d / 2, d, d, 999, { border: `6px solid ${t.rim}`, boxShadow: "0 6px 18px rgba(0,0,0,0.35)" });
     }),
-    /* @__PURE__ */ jsx85(Curve, { text: label2, r: 470, size: 38, color: t.ink })
+    /* @__PURE__ */ jsx86(Curve, { text: label2, r: 470, size: 38, color: t.ink })
   ] });
 }
 function ActivityRing(p, o) {
@@ -12881,21 +13307,21 @@ function ActivityRing(p, o) {
     { cols: ["#FFA3B8", "#C9F2A0", "#A3E4F5"], nums: ["#C7365A", "#4E8A12", "#1D7FA8"], back: "rgba(40,24,60,0.38)", pill: "rgba(255,255,255,0.92)", label: "rgba(40,30,60,0.62)", track: 0.32 },
     { cols: ["#FFFFFF", "#C4C4C4", "#8C8C8C"], nums: ["#FFFFFF", "#C4C4C4", "#9A9A9A"], back: "rgba(0,0,0,0.66)", pill: "rgba(0,0,0,0.82)", label: "rgba(255,255,255,0.62)", track: 0.22 }
   ][p.colour], stats = [["POSTS", p.posts], ["REPLIES", p.replies], ["FOLLOWERS", p.followers]], radii = [503, 465, 427], w = 30, prog = (s) => Math.min(0.97, Math.max(0.05, s.next ? s.cur / s.next : 0.97));
-  return /* @__PURE__ */ jsxs85(Base, { owner: o, children: [
-    /* @__PURE__ */ jsxs85(Svg, { children: [
-      /* @__PURE__ */ jsx85("circle", { cx: C, cy: C, r: 465, fill: "none", stroke: t.back, strokeWidth: 118 }),
+  return /* @__PURE__ */ jsxs86(Base, { owner: o, children: [
+    /* @__PURE__ */ jsxs86(Svg, { children: [
+      /* @__PURE__ */ jsx86("circle", { cx: C, cy: C, r: 465, fill: "none", stroke: t.back, strokeWidth: 118 }),
       radii.map((r, i) => {
         let f = prog(stats[i][1]), end = -90 + 360 * f, [hx, hy] = pt2(r, end);
-        return /* @__PURE__ */ jsxs85("g", { children: [
-          /* @__PURE__ */ jsx85("circle", { cx: C, cy: C, r, fill: "none", stroke: t.cols[i], strokeOpacity: t.track, strokeWidth: w }),
-          /* @__PURE__ */ jsx85("path", { d: arc(r, -90, end), fill: "none", stroke: t.cols[i], strokeWidth: w, strokeLinecap: "round" }),
-          /* @__PURE__ */ jsx85("circle", { cx: hx, cy: hy, r: w / 2 - 1, fill: t.cols[i], stroke: "rgba(0,0,0,0.35)", strokeWidth: 3 })
+        return /* @__PURE__ */ jsxs86("g", { children: [
+          /* @__PURE__ */ jsx86("circle", { cx: C, cy: C, r, fill: "none", stroke: t.cols[i], strokeOpacity: t.track, strokeWidth: w }),
+          /* @__PURE__ */ jsx86("path", { d: arc(r, -90, end), fill: "none", stroke: t.cols[i], strokeWidth: w, strokeLinecap: "round" }),
+          /* @__PURE__ */ jsx86("circle", { cx: hx, cy: hy, r: w / 2 - 1, fill: t.cols[i], stroke: "rgba(0,0,0,0.35)", strokeWidth: 3 })
         ] }, i);
       })
     ] }),
-    /* @__PURE__ */ jsx85("div", { style: { ...flex6, position: "absolute", left: 340, top: 792, width: 400, height: 100, borderRadius: 50, background: t.pill, alignItems: "center", justifyContent: "space-around", padding: "0 18px" }, children: stats.map(([k, s], i) => /* @__PURE__ */ jsxs85("div", { style: { ...flex6, flexDirection: "column", alignItems: "center", width: 118 }, children: [
-      /* @__PURE__ */ jsx85("span", { style: { fontFamily: "Display", fontWeight: 700, fontSize: 32, lineHeight: 1, color: t.nums[i] }, children: num4(s.cur) }),
-      /* @__PURE__ */ jsx85("span", { style: { fontFamily: "Mono", fontWeight: 700, fontSize: 13, letterSpacing: 1.5, marginTop: 7, color: t.label }, children: k })
+    /* @__PURE__ */ jsx86("div", { style: { ...flex6, position: "absolute", left: 340, top: 792, width: 400, height: 100, borderRadius: 50, background: t.pill, alignItems: "center", justifyContent: "space-around", padding: "0 18px" }, children: stats.map(([k, s], i) => /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", alignItems: "center", width: 118 }, children: [
+      /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Display", fontWeight: 700, fontSize: 32, lineHeight: 1, color: t.nums[i] }, children: num4(s.cur) }),
+      /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Mono", fontWeight: 700, fontSize: 13, letterSpacing: 1.5, marginTop: 7, color: t.label }, children: k })
     ] }, k)) })
   ] });
 }
@@ -12910,43 +13336,43 @@ function LaurelRing(p, o) {
     for (let side of [-1, 1]) {
       let rot = tan + side * 42, len = 66 * s, wid = 15 * s;
       leaves.push(
-        /* @__PURE__ */ jsxs85("g", { transform: `translate(${f1(x)} ${f1(y)}) rotate(${f1(rot)})`, children: [
-          /* @__PURE__ */ jsx85("path", { d: leaf(len, wid), fill: "url(#leaf)", stroke: "rgba(0,0,0,0.28)", strokeWidth: 2 }),
-          /* @__PURE__ */ jsx85("path", { d: `M${len * 0.08} 0 L${len * 0.82} 0`, stroke: t.vein, strokeWidth: 2, strokeLinecap: "round" })
+        /* @__PURE__ */ jsxs86("g", { transform: `translate(${f1(x)} ${f1(y)}) rotate(${f1(rot)})`, children: [
+          /* @__PURE__ */ jsx86("path", { d: leaf(len, wid), fill: "url(#leaf)", stroke: "rgba(0,0,0,0.28)", strokeWidth: 2 }),
+          /* @__PURE__ */ jsx86("path", { d: `M${len * 0.08} 0 L${len * 0.82} 0`, stroke: t.vein, strokeWidth: 2, strokeLinecap: "round" })
         ] }, `${k}${side}`)
       );
     }
   }
   let [tx, ty] = pt2(R, to + 2);
-  leaves.push(/* @__PURE__ */ jsx85("g", { transform: `translate(${f1(tx)} ${f1(ty)}) rotate(${f1(to + 92)})`, children: /* @__PURE__ */ jsx85("path", { d: leaf(46, 11), fill: "url(#leaf)", stroke: "rgba(0,0,0,0.28)", strokeWidth: 2 }) }, "tip"));
-  let branch = /* @__PURE__ */ jsxs85("g", { children: [
-    /* @__PURE__ */ jsx85("path", { d: arc(R, from, to), fill: "none", stroke: "rgba(0,0,0,0.3)", strokeWidth: 9, strokeLinecap: "round" }),
-    /* @__PURE__ */ jsx85("path", { d: arc(R, from, to), fill: "none", stroke: t.stem, strokeWidth: 5, strokeLinecap: "round" }),
+  leaves.push(/* @__PURE__ */ jsx86("g", { transform: `translate(${f1(tx)} ${f1(ty)}) rotate(${f1(to + 92)})`, children: /* @__PURE__ */ jsx86("path", { d: leaf(46, 11), fill: "url(#leaf)", stroke: "rgba(0,0,0,0.28)", strokeWidth: 2 }) }, "tip"));
+  let branch = /* @__PURE__ */ jsxs86("g", { children: [
+    /* @__PURE__ */ jsx86("path", { d: arc(R, from, to), fill: "none", stroke: "rgba(0,0,0,0.3)", strokeWidth: 9, strokeLinecap: "round" }),
+    /* @__PURE__ */ jsx86("path", { d: arc(R, from, to), fill: "none", stroke: t.stem, strokeWidth: 5, strokeLinecap: "round" }),
     leaves
   ] }), bx = 300, bw = 480, by2 = 866, bh = 72;
-  return /* @__PURE__ */ jsxs85(Base, { owner: o, children: [
-    /* @__PURE__ */ jsx85(Vignette, { a: 0.3, from: 0.76 }),
-    /* @__PURE__ */ jsxs85(Svg, { children: [
-      /* @__PURE__ */ jsxs85("defs", { children: [
-        /* @__PURE__ */ jsxs85("linearGradient", { id: "leaf", x1: "0", y1: "0", x2: "1", y2: "1", children: [
-          /* @__PURE__ */ jsx85("stop", { offset: "0", stopColor: t.l1 }),
-          /* @__PURE__ */ jsx85("stop", { offset: "1", stopColor: t.l2 })
+  return /* @__PURE__ */ jsxs86(Base, { owner: o, children: [
+    /* @__PURE__ */ jsx86(Vignette, { a: 0.3, from: 0.76 }),
+    /* @__PURE__ */ jsxs86(Svg, { children: [
+      /* @__PURE__ */ jsxs86("defs", { children: [
+        /* @__PURE__ */ jsxs86("linearGradient", { id: "leaf", x1: "0", y1: "0", x2: "1", y2: "1", children: [
+          /* @__PURE__ */ jsx86("stop", { offset: "0", stopColor: t.l1 }),
+          /* @__PURE__ */ jsx86("stop", { offset: "1", stopColor: t.l2 })
         ] }),
-        /* @__PURE__ */ jsxs85("linearGradient", { id: "rib", x1: "0", y1: "0", x2: "0", y2: "1", children: [
-          /* @__PURE__ */ jsx85("stop", { offset: "0", stopColor: t.rib[0] }),
-          /* @__PURE__ */ jsx85("stop", { offset: "1", stopColor: t.rib[1] })
+        /* @__PURE__ */ jsxs86("linearGradient", { id: "rib", x1: "0", y1: "0", x2: "0", y2: "1", children: [
+          /* @__PURE__ */ jsx86("stop", { offset: "0", stopColor: t.rib[0] }),
+          /* @__PURE__ */ jsx86("stop", { offset: "1", stopColor: t.rib[1] })
         ] })
       ] }),
       branch,
-      /* @__PURE__ */ jsx85("g", { transform: "matrix(-1 0 0 1 1080 0)", children: branch }),
-      /* @__PURE__ */ jsx85("path", { d: starPath3(C, C - R, 26, 11), fill: t.star, stroke: "rgba(0,0,0,0.3)", strokeWidth: 2 }),
-      /* @__PURE__ */ jsx85("path", { d: `M${bx + 26} ${by2 + 18} L${bx - 46} ${by2 + 30} L${bx - 22} ${by2 + 58} L${bx - 50} ${by2 + 88} L${bx + 40} ${by2 + 88} Z`, fill: "url(#rib)", stroke: "rgba(0,0,0,0.25)", strokeWidth: 2 }),
-      /* @__PURE__ */ jsx85("path", { d: `M${bx + bw - 26} ${by2 + 18} L${bx + bw + 46} ${by2 + 30} L${bx + bw + 22} ${by2 + 58} L${bx + bw + 50} ${by2 + 88} L${bx + bw - 40} ${by2 + 88} Z`, fill: "url(#rib)", stroke: "rgba(0,0,0,0.25)", strokeWidth: 2 }),
-      /* @__PURE__ */ jsx85("path", { d: `M${bx} ${by2 + bh} L${bx + 40} ${by2 + 88} L${bx + 40} ${by2 + bh} Z`, fill: t.ribDark }),
-      /* @__PURE__ */ jsx85("path", { d: `M${bx + bw} ${by2 + bh} L${bx + bw - 40} ${by2 + 88} L${bx + bw - 40} ${by2 + bh} Z`, fill: t.ribDark }),
-      /* @__PURE__ */ jsx85("rect", { x: bx, y: by2, width: bw, height: bh, rx: 6, fill: "url(#rib)", stroke: "rgba(0,0,0,0.25)", strokeWidth: 2 })
+      /* @__PURE__ */ jsx86("g", { transform: "matrix(-1 0 0 1 1080 0)", children: branch }),
+      /* @__PURE__ */ jsx86("path", { d: starPath3(C, C - R, 26, 11), fill: t.star, stroke: "rgba(0,0,0,0.3)", strokeWidth: 2 }),
+      /* @__PURE__ */ jsx86("path", { d: `M${bx + 26} ${by2 + 18} L${bx - 46} ${by2 + 30} L${bx - 22} ${by2 + 58} L${bx - 50} ${by2 + 88} L${bx + 40} ${by2 + 88} Z`, fill: "url(#rib)", stroke: "rgba(0,0,0,0.25)", strokeWidth: 2 }),
+      /* @__PURE__ */ jsx86("path", { d: `M${bx + bw - 26} ${by2 + 18} L${bx + bw + 46} ${by2 + 30} L${bx + bw + 22} ${by2 + 58} L${bx + bw + 50} ${by2 + 88} L${bx + bw - 40} ${by2 + 88} Z`, fill: "url(#rib)", stroke: "rgba(0,0,0,0.25)", strokeWidth: 2 }),
+      /* @__PURE__ */ jsx86("path", { d: `M${bx} ${by2 + bh} L${bx + 40} ${by2 + 88} L${bx + 40} ${by2 + bh} Z`, fill: t.ribDark }),
+      /* @__PURE__ */ jsx86("path", { d: `M${bx + bw} ${by2 + bh} L${bx + bw - 40} ${by2 + 88} L${bx + bw - 40} ${by2 + bh} Z`, fill: t.ribDark }),
+      /* @__PURE__ */ jsx86("rect", { x: bx, y: by2, width: bw, height: bh, rx: 6, fill: "url(#rib)", stroke: "rgba(0,0,0,0.25)", strokeWidth: 2 })
     ] }),
-    /* @__PURE__ */ jsx85("div", { style: { ...flex6, position: "absolute", left: bx, top: by2, width: bw, height: bh, alignItems: "center", justifyContent: "center", fontFamily: "Display", fontWeight: 700, fontSize: 40, letterSpacing: 5, color: t.ink }, children: `${p.followers.cur >= 1e6 ? `${(p.followers.cur / 1e6).toFixed(1).replace(/\.0$/, "")}M` : p.followers.cur >= 1e5 ? `${Math.round(p.followers.cur / 1e3)}K` : num4(p.followers.cur)} FOLLOWERS` })
+    /* @__PURE__ */ jsx86("div", { style: { ...flex6, position: "absolute", left: bx, top: by2, width: bw, height: bh, alignItems: "center", justifyContent: "center", fontFamily: "Display", fontWeight: 700, fontSize: 40, letterSpacing: 5, color: t.ink }, children: `${p.followers.cur >= 1e6 ? `${(p.followers.cur / 1e6).toFixed(1).replace(/\.0$/, "")}M` : p.followers.cur >= 1e5 ? `${Math.round(p.followers.cur / 1e3)}K` : num4(p.followers.cur)} FOLLOWERS` })
   ] });
 }
 function FlameRing(p, o) {
@@ -12965,17 +13391,17 @@ function FlameRing(p, o) {
     let w = f.w * (0.3 + 0.7 * s), h = f.h * s, X = (u) => f1(f.x + f.m * u * w), Y = (v) => f1(f.y + 8 - v * h);
     return `M${X(0)} ${Y(0)}` + F.map((c) => ` C${X(c[0])} ${Y(c[1])} ${X(c[2])} ${Y(c[3])} ${X(c[4])} ${Y(c[5])}`).join("") + "Z";
   }, embers = front.filter((f) => f.y - f.h > 780).map((f) => ({ x: f.x - f.m * 20 + (rnd() - 0.5) * 30, y: f.y - f.h - 26 - rnd() * 40, r: 3 + rnd() * 3.5 })), label2 = p.ringText || `${num4(p.streak)}-DAY STREAK`;
-  return /* @__PURE__ */ jsxs85(Base, { owner: o, children: [
-    /* @__PURE__ */ jsxs85(Svg, { children: [
-      embers.map((e, i) => /* @__PURE__ */ jsx85("circle", { cx: f1(e.x), cy: f1(e.y), r: f1(e.r), fill: t.f[i % 2 ? 1 : 2] }, `e${i}`)),
-      back.map((f, i) => /* @__PURE__ */ jsx85("path", { d: shape2(f, 1), fill: t.f[3] }, `k${i}`)),
-      front.map((f, i) => /* @__PURE__ */ jsx85("path", { d: shape2(f, 1), fill: t.f[0] }, `a${i}`)),
-      front.map((f, i) => /* @__PURE__ */ jsx85("path", { d: shape2(f, 0.66), fill: t.f[1] }, `b${i}`)),
-      front.map((f, i) => /* @__PURE__ */ jsx85("path", { d: shape2(f, 0.36), fill: t.f[2] }, `c${i}`)),
-      p.fullCircle ? /* @__PURE__ */ jsx85("circle", { cx: C, cy: C, r: 500, fill: "none", stroke: t.band, strokeWidth: 62 }) : /* @__PURE__ */ jsx85("path", { d: arc(500, 16, 164), fill: "none", stroke: t.band, strokeWidth: 62, strokeLinecap: "round" }),
-      p.fullCircle ? /* @__PURE__ */ jsx85("circle", { cx: C, cy: C, r: 470, fill: "none", stroke: t.f[1], strokeOpacity: 0.8, strokeWidth: 3 }) : /* @__PURE__ */ jsx85("path", { d: arc(470, 22, 158), fill: "none", stroke: t.f[1], strokeOpacity: 0.8, strokeWidth: 3, strokeLinecap: "round" })
+  return /* @__PURE__ */ jsxs86(Base, { owner: o, children: [
+    /* @__PURE__ */ jsxs86(Svg, { children: [
+      embers.map((e, i) => /* @__PURE__ */ jsx86("circle", { cx: f1(e.x), cy: f1(e.y), r: f1(e.r), fill: t.f[i % 2 ? 1 : 2] }, `e${i}`)),
+      back.map((f, i) => /* @__PURE__ */ jsx86("path", { d: shape2(f, 1), fill: t.f[3] }, `k${i}`)),
+      front.map((f, i) => /* @__PURE__ */ jsx86("path", { d: shape2(f, 1), fill: t.f[0] }, `a${i}`)),
+      front.map((f, i) => /* @__PURE__ */ jsx86("path", { d: shape2(f, 0.66), fill: t.f[1] }, `b${i}`)),
+      front.map((f, i) => /* @__PURE__ */ jsx86("path", { d: shape2(f, 0.36), fill: t.f[2] }, `c${i}`)),
+      p.fullCircle ? /* @__PURE__ */ jsx86("circle", { cx: C, cy: C, r: 500, fill: "none", stroke: t.band, strokeWidth: 62 }) : /* @__PURE__ */ jsx86("path", { d: arc(500, 16, 164), fill: "none", stroke: t.band, strokeWidth: 62, strokeLinecap: "round" }),
+      p.fullCircle ? /* @__PURE__ */ jsx86("circle", { cx: C, cy: C, r: 470, fill: "none", stroke: t.f[1], strokeOpacity: 0.8, strokeWidth: 3 }) : /* @__PURE__ */ jsx86("path", { d: arc(470, 22, 158), fill: "none", stroke: t.f[1], strokeOpacity: 0.8, strokeWidth: 3, strokeLinecap: "round" })
     ] }),
-    p.fullCircle ? /* @__PURE__ */ jsx85(Curve, { text: roundText(label2, 500, 40), r: 500, size: 40, color: t.ink, at: "ring", start: -90, fill: !0 }) : /* @__PURE__ */ jsx85(Curve, { text: label2, r: 500, size: label2.length > 15 ? 40 : 44, color: t.ink })
+    p.fullCircle ? /* @__PURE__ */ jsx86(Curve, { text: roundText(label2, 500, 40), r: 500, size: 40, color: t.ink, at: "ring", start: -90, fill: !0 }) : /* @__PURE__ */ jsx86(Curve, { text: label2, r: 500, size: label2.length > 15 ? 40 : 44, color: t.ink })
   ] });
 }
 function OdometerRing(p, o) {
@@ -12986,34 +13412,34 @@ function OdometerRing(p, o) {
   ][p.colour], digits = String(Math.max(0, Math.round(p.followers.cur))).padStart(6, "0").split(""), n = digits.length, ww = n > 6 ? 62 : 70, gap = 10, cell = 90, wh = 104, pad3 = 26, pw = n * ww + (n - 1) * gap + pad3 * 2, top = 760, ticks = [];
   for (let a = 150, k = 0; a <= 390.01; a += 6, k++) {
     let major = k % 5 === 0, [x0, y0] = pt2(major ? 482 : 494, a), [x1, y1] = pt2(518, a);
-    ticks.push(/* @__PURE__ */ jsx85("line", { x1: f1(x0), y1: f1(y0), x2: f1(x1), y2: f1(y1), stroke: t.tick, strokeOpacity: major ? 0.95 : 0.6, strokeWidth: major ? 6 : 3, strokeLinecap: "round" }, k));
+    ticks.push(/* @__PURE__ */ jsx86("line", { x1: f1(x0), y1: f1(y0), x2: f1(x1), y2: f1(y1), stroke: t.tick, strokeOpacity: major ? 0.95 : 0.6, strokeWidth: major ? 6 : 3, strokeLinecap: "round" }, k));
   }
   let wheel = (d, i) => {
     let last = i === n - 1, v = Number(d), roll = last ? 16 : 0;
     return (
       // the wheel's shading is its ground (laid over the digits, it dimmed the reading)
-      /* @__PURE__ */ jsx85("div", { style: { ...flex6, position: "relative", width: ww, height: wh, overflow: "hidden", borderRadius: 8, backgroundColor: last ? t.last : t.wheel, backgroundImage: "linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0) 32%, rgba(255,255,255,0.08) 50%, rgba(0,0,0,0) 68%, rgba(0,0,0,0.6) 100%)" }, children: /* @__PURE__ */ jsx85("div", { style: { ...flex6, flexDirection: "column", position: "absolute", left: 0, top: (wh - cell) / 2 - cell - roll, width: ww }, children: [(v + 9) % 10, v, (v + 1) % 10].map((x, k) => /* @__PURE__ */ jsx85("div", { ...k === 1 ? {} : { "data-decor": "the odometer's rolling digits above and below the reading, cut by the wheel on purpose" }, style: { ...flex6, width: ww, height: cell, alignItems: "center", justifyContent: "center", fontFamily: "Mono", fontWeight: 700, fontSize: 70, color: last ? t.lastDigit : t.digit }, children: String(x) }, k)) }) }, i)
+      /* @__PURE__ */ jsx86("div", { style: { ...flex6, position: "relative", width: ww, height: wh, overflow: "hidden", borderRadius: 8, backgroundColor: last ? t.last : t.wheel, backgroundImage: "linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0) 32%, rgba(255,255,255,0.08) 50%, rgba(0,0,0,0) 68%, rgba(0,0,0,0.6) 100%)" }, children: /* @__PURE__ */ jsx86("div", { style: { ...flex6, flexDirection: "column", position: "absolute", left: 0, top: (wh - cell) / 2 - cell - roll, width: ww }, children: [(v + 9) % 10, v, (v + 1) % 10].map((x, k) => /* @__PURE__ */ jsx86("div", { ...k === 1 ? {} : { "data-decor": "the odometer's rolling digits above and below the reading, cut by the wheel on purpose" }, style: { ...flex6, width: ww, height: cell, alignItems: "center", justifyContent: "center", fontFamily: "Mono", fontWeight: 700, fontSize: 70, color: last ? t.lastDigit : t.digit }, children: String(x) }, k)) }) }, i)
     );
   };
-  return /* @__PURE__ */ jsxs85(Base, { owner: o, children: [
-    /* @__PURE__ */ jsx85(Vignette, { a: 0.55, from: 0.7 }),
-    /* @__PURE__ */ jsxs85(Svg, { children: [
-      /* @__PURE__ */ jsx85("path", { d: arc(506, 150, 390), fill: "none", stroke: "rgba(0,0,0,0.35)", strokeWidth: 50, strokeLinecap: "round" }),
+  return /* @__PURE__ */ jsxs86(Base, { owner: o, children: [
+    /* @__PURE__ */ jsx86(Vignette, { a: 0.55, from: 0.7 }),
+    /* @__PURE__ */ jsxs86(Svg, { children: [
+      /* @__PURE__ */ jsx86("path", { d: arc(506, 150, 390), fill: "none", stroke: "rgba(0,0,0,0.35)", strokeWidth: 50, strokeLinecap: "round" }),
       ticks,
       (() => {
         let [x, y] = pt2(506, 150 + 240 * Math.min(1, p.followers.next ? p.followers.cur / p.followers.next : 1));
-        return /* @__PURE__ */ jsx85("circle", { cx: x, cy: y, r: 13, fill: t.accent, stroke: "rgba(0,0,0,0.45)", strokeWidth: 4 });
+        return /* @__PURE__ */ jsx86("circle", { cx: x, cy: y, r: 13, fill: t.accent, stroke: "rgba(0,0,0,0.45)", strokeWidth: 4 });
       })()
     ] }),
-    /* @__PURE__ */ jsxs85("div", { style: { ...flex6, flexDirection: "column", position: "absolute", left: (S - pw) / 2, top, width: pw, padding: pad3, paddingTop: 18, borderRadius: 30, background: t.bezel, boxShadow: "0 14px 34px rgba(0,0,0,0.45)" }, children: [
-      /* @__PURE__ */ jsxs85("div", { style: { ...flex6, justifyContent: "space-between", alignItems: "center", fontFamily: "Mono", fontWeight: 700, fontSize: 20, letterSpacing: 4, color: t.label, marginBottom: 12 }, children: [
-        /* @__PURE__ */ jsx85("span", { children: "FOLLOWERS" }),
-        /* @__PURE__ */ jsxs85("span", { style: { letterSpacing: 1 }, children: [
+    /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", position: "absolute", left: (S - pw) / 2, top, width: pw, padding: pad3, paddingTop: 18, borderRadius: 30, background: t.bezel, boxShadow: "0 14px 34px rgba(0,0,0,0.45)" }, children: [
+      /* @__PURE__ */ jsxs86("div", { style: { ...flex6, justifyContent: "space-between", alignItems: "center", fontFamily: "Mono", fontWeight: 700, fontSize: 20, letterSpacing: 4, color: t.label, marginBottom: 12 }, children: [
+        /* @__PURE__ */ jsx86("span", { children: "FOLLOWERS" }),
+        /* @__PURE__ */ jsxs86("span", { style: { letterSpacing: 1 }, children: [
           "@",
           o.handle
         ] })
       ] }),
-      /* @__PURE__ */ jsx85("div", { style: { ...flex6, gap, padding: 0 }, children: digits.map(wheel) })
+      /* @__PURE__ */ jsx86("div", { style: { ...flex6, gap, padding: 0 }, children: digits.map(wheel) })
     ] })
   ] });
 }
@@ -13022,20 +13448,20 @@ function NeonRing(p, o) {
     { a: "#FF2E88", b: "#2EE6FF", core: "#FFE6F2", word: "#FFE6F2" },
     { a: "#29E7FF", b: "#9D6BFF", core: "#E8FDFF", word: "#E8FDFF" },
     { a: "#FFFFFF", b: "#FFFFFF", core: "#FFFFFF", word: "#FFFFFF" }
-  ][p.colour], glow = (d, col5, k, core, w = 12) => /* @__PURE__ */ jsxs85("g", { children: [
-    /* @__PURE__ */ jsx85("path", { d, fill: "none", stroke: col5, strokeOpacity: 0.1, strokeWidth: w * 5.5, strokeLinecap: "round" }),
-    /* @__PURE__ */ jsx85("path", { d, fill: "none", stroke: col5, strokeOpacity: 0.18, strokeWidth: w * 3.4, strokeLinecap: "round" }),
-    /* @__PURE__ */ jsx85("path", { d, fill: "none", stroke: col5, strokeOpacity: 0.4, strokeWidth: w * 2, strokeLinecap: "round" }),
-    /* @__PURE__ */ jsx85("path", { d, fill: "none", stroke: col5, strokeWidth: w, strokeLinecap: "round" }),
-    /* @__PURE__ */ jsx85("path", { d, fill: "none", stroke: core, strokeWidth: w * 0.36, strokeLinecap: "round" })
+  ][p.colour], glow = (d, col5, k, core, w = 12) => /* @__PURE__ */ jsxs86("g", { children: [
+    /* @__PURE__ */ jsx86("path", { d, fill: "none", stroke: col5, strokeOpacity: 0.1, strokeWidth: w * 5.5, strokeLinecap: "round" }),
+    /* @__PURE__ */ jsx86("path", { d, fill: "none", stroke: col5, strokeOpacity: 0.18, strokeWidth: w * 3.4, strokeLinecap: "round" }),
+    /* @__PURE__ */ jsx86("path", { d, fill: "none", stroke: col5, strokeOpacity: 0.4, strokeWidth: w * 2, strokeLinecap: "round" }),
+    /* @__PURE__ */ jsx86("path", { d, fill: "none", stroke: col5, strokeWidth: w, strokeLinecap: "round" }),
+    /* @__PURE__ */ jsx86("path", { d, fill: "none", stroke: core, strokeWidth: w * 0.36, strokeLinecap: "round" })
   ] }, k), sh = `0 0 6px ${t.a}, 0 0 16px ${t.a}, 0 0 34px ${t.a}, 0 0 60px ${t.a}`;
-  return /* @__PURE__ */ jsxs85(Base, { owner: o, children: [
-    /* @__PURE__ */ jsx85(Vignette, { a: 0.72, from: 0.62 }),
-    /* @__PURE__ */ jsxs85(Svg, { children: [
+  return /* @__PURE__ */ jsxs86(Base, { owner: o, children: [
+    /* @__PURE__ */ jsx86(Vignette, { a: 0.72, from: 0.62 }),
+    /* @__PURE__ */ jsxs86(Svg, { children: [
       glow(arc(486, 119, 421), t.a, "outer", t.core, 13),
       glow(arc(450, 128, 412), t.b, "inner", (p.colour === 2, "#FFFFFF"), 6)
     ] }),
-    /* @__PURE__ */ jsx85("div", { style: { ...flex6, position: "absolute", left: 0, top: 930, width: S, justifyContent: "center", fontFamily: "Display", fontWeight: 700, fontSize: 92, letterSpacing: 8, color: t.word, textShadow: sh }, children: "ONLINE" })
+    /* @__PURE__ */ jsx86("div", { style: { ...flex6, position: "absolute", left: 0, top: 930, width: S, justifyContent: "center", fontFamily: "Display", fontWeight: 700, fontSize: 92, letterSpacing: 8, color: t.word, textShadow: sh }, children: "ONLINE" })
   ] });
 }
 var GLYPH = {
@@ -13046,7 +13472,7 @@ var GLYPH = {
   P: ["11110", "10001", "10001", "11110", "10000", "10000", "10000"],
   "!": ["00100", "00100", "00100", "00100", "00100", "00000", "00100"],
   " ": ["00000", "00000", "00000", "00000", "00000", "00000", "00000"]
-}, HEART = ["0110110", "1111111", "1111111", "0111110", "0011100", "0001000"], PSTAR = ["0001000", "0011100", "1111111", "0111110", "0011100", "0110110", "1100011"], bitmap = (rows, x, y, px2, color, k) => rows.flatMap((row, j) => row.split("").map((b, i) => b === "1" ? /* @__PURE__ */ jsx85("rect", { x: x + i * px2, y: y + j * px2, width: px2, height: px2, fill: color }, `${k}${i}-${j}`) : null));
+}, HEART = ["0110110", "1111111", "1111111", "0111110", "0011100", "0001000"], PSTAR = ["0001000", "0011100", "1111111", "0111110", "0011100", "0110110", "1100011"], bitmap = (rows, x, y, px2, color, k) => rows.flatMap((row, j) => row.split("").map((b, i) => b === "1" ? /* @__PURE__ */ jsx86("rect", { x: x + i * px2, y: y + j * px2, width: px2, height: px2, fill: color }, `${k}${i}-${j}`) : null));
 function PixelRing(p, o) {
   let PICO = ["#FF004D", "#FFA300", "#FFEC27", "#00E436", "#29ADFF", "#83769C", "#FF77A8"], t = [
     { band: (a, _d) => PICO[Math.floor(((a + 90) % 360 + 360) % 360 / 25.714285714285715) % PICO.length], line: "#111111", hi: "rgba(255,255,255,0.35)", box: "#111111", border: "#FFFFFF", text: "#FFEC27", heart: "#FF004D", star: "#FFEC27" },
@@ -13057,15 +13483,15 @@ function PixelRing(p, o) {
     let x = C + i * cell, y = C + j * cell, cx = x + cell / 2 - C, cy = y + cell / 2 - C, d = Math.hypot(cx, cy), L2 = layers.findIndex((r) => Math.abs(d - r) < cell / 2);
     if (L2 < 0) continue;
     let a = Math.atan2(cy, cx) * 180 / Math.PI;
-    cells.push(/* @__PURE__ */ jsx85("rect", { x, y, width: cell, height: cell, fill: L2 === 0 ? t.line : t.band(a, L2 === 1 ? 490 : 520) }, `${i}_${j}`)), L2 === 1 && p.colour === 0 && cells.push(/* @__PURE__ */ jsx85("rect", { x, y, width: cell, height: 6, fill: t.hi }, `h${i}_${j}`));
+    cells.push(/* @__PURE__ */ jsx86("rect", { x, y, width: cell, height: cell, fill: L2 === 0 ? t.line : t.band(a, L2 === 1 ? 490 : 520) }, `${i}_${j}`)), L2 === 1 && p.colour === 0 && cells.push(/* @__PURE__ */ jsx86("rect", { x, y, width: cell, height: 6, fill: t.hi }, `h${i}_${j}`));
   }
-  let word = "LEVEL UP!", px2 = 7, adv = 6 * px2, tw = word.length * adv - px2, bw = 444, bh = 96, bx = (S - bw) / 2, by2 = 828, q = 6, pixelBox = /* @__PURE__ */ jsxs85("g", { children: [
-    /* @__PURE__ */ jsx85("rect", { x: bx + q, y: by2, width: bw - 2 * q, height: bh, fill: t.border }),
-    /* @__PURE__ */ jsx85("rect", { x: bx, y: by2 + q, width: bw, height: bh - 2 * q, fill: t.border }),
-    /* @__PURE__ */ jsx85("rect", { x: bx + q, y: by2 + q, width: bw - 2 * q, height: bh - 2 * q, fill: t.box }),
-    /* @__PURE__ */ jsx85("rect", { x: bx + 2 * q, y: by2 + q * 2, width: bw - 4 * q, height: bh - 4 * q, fill: t.box, stroke: t.border, strokeOpacity: 0.35, strokeWidth: 2 })
+  let word = "LEVEL UP!", px2 = 7, adv = 6 * px2, tw = word.length * adv - px2, bw = 444, bh = 96, bx = (S - bw) / 2, by2 = 828, q = 6, pixelBox = /* @__PURE__ */ jsxs86("g", { children: [
+    /* @__PURE__ */ jsx86("rect", { x: bx + q, y: by2, width: bw - 2 * q, height: bh, fill: t.border }),
+    /* @__PURE__ */ jsx86("rect", { x: bx, y: by2 + q, width: bw, height: bh - 2 * q, fill: t.border }),
+    /* @__PURE__ */ jsx86("rect", { x: bx + q, y: by2 + q, width: bw - 2 * q, height: bh - 2 * q, fill: t.box }),
+    /* @__PURE__ */ jsx86("rect", { x: bx + 2 * q, y: by2 + q * 2, width: bw - 4 * q, height: bh - 4 * q, fill: t.box, stroke: t.border, strokeOpacity: 0.35, strokeWidth: 2 })
   ] });
-  return /* @__PURE__ */ jsx85(Base, { owner: o, children: /* @__PURE__ */ jsxs85(Svg, { children: [
+  return /* @__PURE__ */ jsx86(Base, { owner: o, children: /* @__PURE__ */ jsxs86(Svg, { children: [
     cells,
     pixelBox,
     word.split("").flatMap((ch, k) => bitmap(GLYPH[ch] ?? GLYPH[" "], (S - tw) / 2 + k * adv, by2 + (bh - 7 * px2) / 2, px2, t.text, `w${k}`)),
@@ -13073,19 +13499,19 @@ function PixelRing(p, o) {
     bitmap(PSTAR, 818, 256, 6, t.star, "st")
   ] }) });
 }
-var pumpkin = (x, y, s, c, k) => /* @__PURE__ */ jsxs85("g", { transform: `translate(${f1(x)} ${f1(y)}) scale(${s})`, children: [
-  /* @__PURE__ */ jsx85("ellipse", { cx: 0, cy: 6, rx: 78, ry: 58, fill: "rgba(0,0,0,0.25)" }),
-  /* @__PURE__ */ jsx85("ellipse", { cx: -36, cy: 0, rx: 40, ry: 50, fill: c.side }),
-  /* @__PURE__ */ jsx85("ellipse", { cx: 36, cy: 0, rx: 40, ry: 50, fill: c.side }),
-  /* @__PURE__ */ jsx85("ellipse", { cx: -17, cy: 0, rx: 38, ry: 54, fill: c.body }),
-  /* @__PURE__ */ jsx85("ellipse", { cx: 17, cy: 0, rx: 38, ry: 54, fill: c.body }),
-  /* @__PURE__ */ jsx85("ellipse", { cx: 0, cy: 0, rx: 26, ry: 55, fill: c.hi }),
-  /* @__PURE__ */ jsx85("path", { d: "M-5 -50 C-6 -64 -2 -73 9 -78 L14 -71 C7 -67 5 -60 6 -50 Z", fill: c.stem }),
-  /* @__PURE__ */ jsx85("path", { d: "M-32 -12 L-11 -12 L-21 -31 Z", fill: c.face }),
-  /* @__PURE__ */ jsx85("path", { d: "M11 -12 L32 -12 L21 -31 Z", fill: c.face }),
-  /* @__PURE__ */ jsx85("path", { d: "M-5 2 L5 2 L0 -7 Z", fill: c.face }),
-  /* @__PURE__ */ jsx85("path", { d: "M-36 12 L-26 16 L-20 10 L-12 19 L-4 12 L4 19 L12 12 L20 19 L26 13 L36 12 Q20 40 0 40 Q-20 40 -36 12 Z", fill: c.face })
-] }, k), bat = (x, y, w, color, k, tilt = 0) => /* @__PURE__ */ jsx85(
+var pumpkin = (x, y, s, c, k) => /* @__PURE__ */ jsxs86("g", { transform: `translate(${f1(x)} ${f1(y)}) scale(${s})`, children: [
+  /* @__PURE__ */ jsx86("ellipse", { cx: 0, cy: 6, rx: 78, ry: 58, fill: "rgba(0,0,0,0.25)" }),
+  /* @__PURE__ */ jsx86("ellipse", { cx: -36, cy: 0, rx: 40, ry: 50, fill: c.side }),
+  /* @__PURE__ */ jsx86("ellipse", { cx: 36, cy: 0, rx: 40, ry: 50, fill: c.side }),
+  /* @__PURE__ */ jsx86("ellipse", { cx: -17, cy: 0, rx: 38, ry: 54, fill: c.body }),
+  /* @__PURE__ */ jsx86("ellipse", { cx: 17, cy: 0, rx: 38, ry: 54, fill: c.body }),
+  /* @__PURE__ */ jsx86("ellipse", { cx: 0, cy: 0, rx: 26, ry: 55, fill: c.hi }),
+  /* @__PURE__ */ jsx86("path", { d: "M-5 -50 C-6 -64 -2 -73 9 -78 L14 -71 C7 -67 5 -60 6 -50 Z", fill: c.stem }),
+  /* @__PURE__ */ jsx86("path", { d: "M-32 -12 L-11 -12 L-21 -31 Z", fill: c.face }),
+  /* @__PURE__ */ jsx86("path", { d: "M11 -12 L32 -12 L21 -31 Z", fill: c.face }),
+  /* @__PURE__ */ jsx86("path", { d: "M-5 2 L5 2 L0 -7 Z", fill: c.face }),
+  /* @__PURE__ */ jsx86("path", { d: "M-36 12 L-26 16 L-20 10 L-12 19 L-4 12 L4 19 L12 12 L20 19 L26 13 L36 12 Q20 40 0 40 Q-20 40 -36 12 Z", fill: c.face })
+] }, k), bat = (x, y, w, color, k, tilt = 0) => /* @__PURE__ */ jsx86(
   "path",
   {
     transform: `translate(${f1(x - w / 2)} ${f1(y - w / 4)}) scale(${(w / 100).toFixed(3)}) rotate(${tilt} 50 25)`,
@@ -13100,29 +13526,29 @@ function SpookyRing(p, o) {
     { ring: "#C9B2FF", band: "#F3ECFF", ink: "#5B3C9E", pk: { body: "#FFB98A", side: "#F29A66", hi: "#FFD0AE", stem: "#7BAE7F", face: "#5B3C9E" }, bat: "#5B3C9E", moon: "#FFF4D6" },
     { ring: "#FFFFFF", band: "#0E0E0E", ink: "#FFFFFF", pk: { body: "#F2F2F2", side: "#C8C8C8", hi: "#FFFFFF", stem: "#3A3A3A", face: "#111111" }, bat: "#0E0E0E", moon: "#FFFFFF" }
   ][p.colour], [p1x, p1y] = pt2(418, 146), [p2x, p2y] = pt2(418, 34), label2 = p.ringText || "SPOOKY SEASON";
-  return /* @__PURE__ */ jsxs85(Base, { owner: o, children: [
-    /* @__PURE__ */ jsx85(Vignette, { a: 0.45, from: 0.72, tint: p.colour === 1 ? "#2A1240" : "#000" }),
-    /* @__PURE__ */ jsxs85(Svg, { children: [
-      /* @__PURE__ */ jsx85("defs", { children: /* @__PURE__ */ jsxs85("mask", { id: "cres", children: [
-        /* @__PURE__ */ jsx85("rect", { x: 0, y: 0, width: S, height: S, fill: "#000" }),
-        /* @__PURE__ */ jsx85("circle", { cx: 836, cy: 236, r: 56, fill: "#fff" }),
-        /* @__PURE__ */ jsx85("circle", { cx: 858, cy: 220, r: 50, fill: "#000" })
+  return /* @__PURE__ */ jsxs86(Base, { owner: o, children: [
+    /* @__PURE__ */ jsx86(Vignette, { a: 0.45, from: 0.72, tint: p.colour === 1 ? "#2A1240" : "#000" }),
+    /* @__PURE__ */ jsxs86(Svg, { children: [
+      /* @__PURE__ */ jsx86("defs", { children: /* @__PURE__ */ jsxs86("mask", { id: "cres", children: [
+        /* @__PURE__ */ jsx86("rect", { x: 0, y: 0, width: S, height: S, fill: "#000" }),
+        /* @__PURE__ */ jsx86("circle", { cx: 836, cy: 236, r: 56, fill: "#fff" }),
+        /* @__PURE__ */ jsx86("circle", { cx: 858, cy: 220, r: 50, fill: "#000" })
       ] }) }),
-      /* @__PURE__ */ jsx85("circle", { cx: C, cy: C, r: 506, fill: "none", stroke: "rgba(0,0,0,0.3)", strokeWidth: 22 }),
-      /* @__PURE__ */ jsx85("circle", { cx: C, cy: C, r: 506, fill: "none", stroke: t.ring, strokeWidth: 14 }),
-      /* @__PURE__ */ jsx85("circle", { cx: C, cy: C, r: 486, fill: "none", stroke: t.ring, strokeOpacity: 0.7, strokeWidth: 3, strokeDasharray: "14 12" }),
-      /* @__PURE__ */ jsx85("rect", { x: 0, y: 0, width: S, height: S, fill: t.moon, mask: "url(#cres)" }),
+      /* @__PURE__ */ jsx86("circle", { cx: C, cy: C, r: 506, fill: "none", stroke: "rgba(0,0,0,0.3)", strokeWidth: 22 }),
+      /* @__PURE__ */ jsx86("circle", { cx: C, cy: C, r: 506, fill: "none", stroke: t.ring, strokeWidth: 14 }),
+      /* @__PURE__ */ jsx86("circle", { cx: C, cy: C, r: 486, fill: "none", stroke: t.ring, strokeOpacity: 0.7, strokeWidth: 3, strokeDasharray: "14 12" }),
+      /* @__PURE__ */ jsx86("rect", { x: 0, y: 0, width: S, height: S, fill: t.moon, mask: "url(#cres)" }),
       sparkle(760, 178, 12, t.moon, 1),
       sparkle(900, 330, 9, t.moon, 2),
       sparkle(214, 420, 9, t.moon, 3),
       bat(212, 296, 124, t.bat, "b1", -8),
       bat(286, 192, 66, t.bat, "b2", 12),
       bat(138, 414, 62, t.bat, "b3", -18),
-      p.fullCircle ? /* @__PURE__ */ jsx85("circle", { cx: C, cy: C, r: 476, fill: "none", stroke: t.band, strokeWidth: 66 }) : /* @__PURE__ */ jsx85("path", { d: arc(476, ...bandFor(label2, 476, 42, 52, 128, 150)), fill: "none", stroke: t.band, strokeWidth: 66, strokeLinecap: "round" }),
+      p.fullCircle ? /* @__PURE__ */ jsx86("circle", { cx: C, cy: C, r: 476, fill: "none", stroke: t.band, strokeWidth: 66 }) : /* @__PURE__ */ jsx86("path", { d: arc(476, ...bandFor(label2, 476, 42, 52, 128, 150)), fill: "none", stroke: t.band, strokeWidth: 66, strokeLinecap: "round" }),
       pumpkin(p1x, p1y, 1.1, t.pk, "pk1"),
       pumpkin(p2x, p2y, 0.94, t.pk, "pk2")
     ] }),
-    p.fullCircle ? /* @__PURE__ */ jsx85(Curve, { text: roundText(label2, 476, 40), r: 476, size: 40, color: t.ink, at: "ring", start: -90, fill: !0 }) : /* @__PURE__ */ jsx85(Curve, { text: label2, r: 476, size: label2.length > 20 ? 38 : 42, color: t.ink })
+    p.fullCircle ? /* @__PURE__ */ jsx86(Curve, { text: roundText(label2, 476, 40), r: 476, size: 40, color: t.ink, at: "ring", start: -90, fill: !0 }) : /* @__PURE__ */ jsx86(Curve, { text: label2, r: 476, size: label2.length > 20 ? 38 : 42, color: t.ink })
   ] });
 }
 function WreathRing(p, o) {
@@ -13133,37 +13559,37 @@ function WreathRing(p, o) {
   ][p.colour], rnd = seeded(77), leaves = [], berries = [], leaf = (L2, W4) => `M${-L2 / 2} 0 Q0 ${-W4} ${L2 / 2} 0 Q0 ${W4} ${-L2 / 2} 0Z`;
   for (let i = 0; i < 420; i++) {
     let a = i * 360 / 420 + rnd() * 1.2, r = 458 + rnd() * 46, L2 = 54 + rnd() * 20, rot = a + 90 + (rnd() > 0.5 ? 1 : -1) * (20 + rnd() * 40), [x, y] = pt2(r, a);
-    leaves.push(/* @__PURE__ */ jsx85("path", { transform: `translate(${f1(x)} ${f1(y)}) rotate(${f1(rot)})`, d: leaf(L2, 17), fill: t.greens[Math.floor(rnd() * 4)], stroke: "rgba(0,0,0,0.2)", strokeWidth: 1.5 }, i));
+    leaves.push(/* @__PURE__ */ jsx86("path", { transform: `translate(${f1(x)} ${f1(y)}) rotate(${f1(rot)})`, d: leaf(L2, 17), fill: t.greens[Math.floor(rnd() * 4)], stroke: "rgba(0,0,0,0.2)", strokeWidth: 1.5 }, i));
   }
   for (let a = -90, k = 0; a < 250; a += 26, k++) {
     if (a > 62 && a < 118) continue;
     let r = 488 + (k % 2 ? 12 : -12);
     [[0, 0], [16, 6], [6, 17]].forEach(([dx, dy], j) => {
       let [x, y] = pt2(r, a), bx2 = x + dx - 8, by3 = y + dy - 8;
-      berries.push(/* @__PURE__ */ jsxs85("g", { children: [
-        /* @__PURE__ */ jsx85("circle", { cx: bx2, cy: by3, r: 10, fill: t.berry, stroke: "rgba(0,0,0,0.3)", strokeWidth: 2 }),
-        /* @__PURE__ */ jsx85("circle", { cx: bx2 - 3, cy: by3 - 3, r: 3, fill: t.berryHi })
+      berries.push(/* @__PURE__ */ jsxs86("g", { children: [
+        /* @__PURE__ */ jsx86("circle", { cx: bx2, cy: by3, r: 10, fill: t.berry, stroke: "rgba(0,0,0,0.3)", strokeWidth: 2 }),
+        /* @__PURE__ */ jsx86("circle", { cx: bx2 - 3, cy: by3 - 3, r: 3, fill: t.berryHi })
       ] }, `${k}-${j}`));
     });
   }
   let lights = Array.from({ length: 24 }, (_, i) => {
     let a = i * 15 + 7, [x, y] = pt2(i % 2 ? 470 : 512, a);
-    return a > 70 && a < 110 ? null : /* @__PURE__ */ jsx85("circle", { cx: x, cy: y, r: 5, fill: t.light }, `l${i}`);
+    return a > 70 && a < 110 ? null : /* @__PURE__ */ jsx86("circle", { cx: x, cy: y, r: 5, fill: t.light }, `l${i}`);
   }), bx = C;
-  return /* @__PURE__ */ jsx85(Base, { owner: o, children: /* @__PURE__ */ jsxs85(Svg, { children: [
-    /* @__PURE__ */ jsx85("circle", { cx: C, cy: C, r: 485, fill: "none", stroke: t.greens[2], strokeWidth: 70 }),
-    /* @__PURE__ */ jsx85("circle", { cx: C, cy: C, r: 485, fill: "none", stroke: "rgba(0,0,0,0.25)", strokeWidth: 70 }),
+  return /* @__PURE__ */ jsx86(Base, { owner: o, children: /* @__PURE__ */ jsxs86(Svg, { children: [
+    /* @__PURE__ */ jsx86("circle", { cx: C, cy: C, r: 485, fill: "none", stroke: t.greens[2], strokeWidth: 70 }),
+    /* @__PURE__ */ jsx86("circle", { cx: C, cy: C, r: 485, fill: "none", stroke: "rgba(0,0,0,0.25)", strokeWidth: 70 }),
     leaves,
     lights,
     berries,
-    /* @__PURE__ */ jsxs85("g", { transform: `translate(${bx} 966) scale(1.25)`, children: [
-      /* @__PURE__ */ jsx85("path", { d: "M-6 8 L-46 74 L-30 68 L-24 84 L8 14 Z", fill: t.bowDark }),
-      /* @__PURE__ */ jsx85("path", { d: "M6 8 L46 74 L30 68 L24 84 L-8 14 Z", fill: t.bow }),
-      /* @__PURE__ */ jsx85("path", { d: "M0 0 C-30 -54 -96 -52 -92 -8 C-90 26 -38 20 0 0 Z", fill: t.bow, stroke: t.bowDark, strokeWidth: 4 }),
-      /* @__PURE__ */ jsx85("path", { d: "M0 0 C30 -54 96 -52 92 -8 C90 26 38 20 0 0 Z", fill: t.bow, stroke: t.bowDark, strokeWidth: 4 }),
-      /* @__PURE__ */ jsx85("path", { d: "M-14 -4 C-34 -30 -70 -32 -72 -10", fill: "none", stroke: t.bowDark, strokeWidth: 4, strokeLinecap: "round" }),
-      /* @__PURE__ */ jsx85("path", { d: "M14 -4 C34 -30 70 -32 72 -10", fill: "none", stroke: t.bowDark, strokeWidth: 4, strokeLinecap: "round" }),
-      /* @__PURE__ */ jsx85("rect", { x: -17, y: -17, width: 34, height: 32, rx: 10, fill: t.bow, stroke: t.bowDark, strokeWidth: 4 })
+    /* @__PURE__ */ jsxs86("g", { transform: `translate(${bx} 966) scale(1.25)`, children: [
+      /* @__PURE__ */ jsx86("path", { d: "M-6 8 L-46 74 L-30 68 L-24 84 L8 14 Z", fill: t.bowDark }),
+      /* @__PURE__ */ jsx86("path", { d: "M6 8 L46 74 L30 68 L24 84 L-8 14 Z", fill: t.bow }),
+      /* @__PURE__ */ jsx86("path", { d: "M0 0 C-30 -54 -96 -52 -92 -8 C-90 26 -38 20 0 0 Z", fill: t.bow, stroke: t.bowDark, strokeWidth: 4 }),
+      /* @__PURE__ */ jsx86("path", { d: "M0 0 C30 -54 96 -52 92 -8 C90 26 38 20 0 0 Z", fill: t.bow, stroke: t.bowDark, strokeWidth: 4 }),
+      /* @__PURE__ */ jsx86("path", { d: "M-14 -4 C-34 -30 -70 -32 -72 -10", fill: "none", stroke: t.bowDark, strokeWidth: 4, strokeLinecap: "round" }),
+      /* @__PURE__ */ jsx86("path", { d: "M14 -4 C34 -30 70 -32 72 -10", fill: "none", stroke: t.bowDark, strokeWidth: 4, strokeLinecap: "round" }),
+      /* @__PURE__ */ jsx86("rect", { x: -17, y: -17, width: 34, height: 32, rx: 10, fill: t.bow, stroke: t.bowDark, strokeWidth: 4 })
     ] })
   ] }) });
 }
@@ -13176,32 +13602,32 @@ function LaunchRing(p, o) {
   for (let a = a0, k = 0; a <= a1 - 8; a += 5.7, k++) {
     if (Math.abs(a - head2) < 9) continue;
     let major = k % 5 === 0, [x0, y0] = pt2(major ? 476 : 484, a), [x1, y1] = pt2(major ? 512 : 504, a);
-    ticks.push(/* @__PURE__ */ jsx85("line", { x1: f1(x0), y1: f1(y0), x2: f1(x1), y2: f1(y1), stroke: t.tick, strokeOpacity: a < head2 ? 0.35 : 0.9, strokeWidth: major ? 5 : 3, strokeLinecap: "round" }, k));
+    ticks.push(/* @__PURE__ */ jsx86("line", { x1: f1(x0), y1: f1(y0), x2: f1(x1), y2: f1(y1), stroke: t.tick, strokeOpacity: a < head2 ? 0.35 : 0.9, strokeWidth: major ? 5 : 3, strokeLinecap: "round" }, k));
   }
   let label2 = p.ringText || (p.days === 0 ? "LAUNCHING TODAY \xB7 DEC 1" : `LAUNCHING DEC 1 \xB7 ${p.days} DAY${p.days === 1 ? "" : "S"} TO GO`);
-  return /* @__PURE__ */ jsxs85(Base, { owner: o, children: [
-    /* @__PURE__ */ jsx85(Vignette, { a: 0.55, from: 0.7 }),
-    /* @__PURE__ */ jsxs85(Svg, { children: [
-      /* @__PURE__ */ jsx85("path", { d: arc(R, a0, a1), fill: "none", stroke: "rgba(0,0,0,0.38)", strokeWidth: 54, strokeLinecap: "round" }),
+  return /* @__PURE__ */ jsxs86(Base, { owner: o, children: [
+    /* @__PURE__ */ jsx86(Vignette, { a: 0.55, from: 0.7 }),
+    /* @__PURE__ */ jsxs86(Svg, { children: [
+      /* @__PURE__ */ jsx86("path", { d: arc(R, a0, a1), fill: "none", stroke: "rgba(0,0,0,0.38)", strokeWidth: 54, strokeLinecap: "round" }),
       ticks,
-      /* @__PURE__ */ jsx85("path", { d: arc(R, a0, head2 - 6), fill: "none", stroke: t.accent, strokeWidth: 8, strokeLinecap: "round", strokeDasharray: "1 16" }),
-      /* @__PURE__ */ jsx85("circle", { cx: pt2(R, a0)[0], cy: pt2(R, a0)[1], r: 10, fill: t.accent }),
-      /* @__PURE__ */ jsxs85("g", { transform: `translate(${f1(ex)} ${f1(ey)})`, children: [
-        /* @__PURE__ */ jsx85("circle", { cx: 0, cy: 0, r: 26, fill: t.planet, stroke: "rgba(0,0,0,0.35)", strokeWidth: 3 }),
-        /* @__PURE__ */ jsx85("ellipse", { cx: 0, cy: 0, rx: 44, ry: 11, fill: "none", stroke: t.body, strokeWidth: 4, transform: "rotate(-24)" })
+      /* @__PURE__ */ jsx86("path", { d: arc(R, a0, head2 - 6), fill: "none", stroke: t.accent, strokeWidth: 8, strokeLinecap: "round", strokeDasharray: "1 16" }),
+      /* @__PURE__ */ jsx86("circle", { cx: pt2(R, a0)[0], cy: pt2(R, a0)[1], r: 10, fill: t.accent }),
+      /* @__PURE__ */ jsxs86("g", { transform: `translate(${f1(ex)} ${f1(ey)})`, children: [
+        /* @__PURE__ */ jsx86("circle", { cx: 0, cy: 0, r: 26, fill: t.planet, stroke: "rgba(0,0,0,0.35)", strokeWidth: 3 }),
+        /* @__PURE__ */ jsx86("ellipse", { cx: 0, cy: 0, rx: 44, ry: 11, fill: "none", stroke: t.body, strokeWidth: 4, transform: "rotate(-24)" })
       ] }),
-      /* @__PURE__ */ jsxs85("g", { transform: `translate(${f1(rx)} ${f1(ry)}) rotate(${f1(head2 + 180)}) scale(1.15)`, children: [
-        /* @__PURE__ */ jsx85("path", { d: "M-8 30 Q0 74 8 30 Z", fill: t.accent }),
-        /* @__PURE__ */ jsx85("path", { d: "M-4 30 Q0 54 4 30 Z", fill: "#FFE15A" }),
-        /* @__PURE__ */ jsx85("path", { d: "M-18 4 L-32 30 L-18 26 Z", fill: t.accent, stroke: "rgba(0,0,0,0.35)", strokeWidth: 2 }),
-        /* @__PURE__ */ jsx85("path", { d: "M18 4 L32 30 L18 26 Z", fill: t.accent, stroke: "rgba(0,0,0,0.35)", strokeWidth: 2 }),
-        /* @__PURE__ */ jsx85("path", { d: "M0 -50 C16 -36 20 -10 18 26 L-18 26 C-20 -10 -16 -36 0 -50 Z", fill: t.body, stroke: "rgba(0,0,0,0.35)", strokeWidth: 2 }),
-        /* @__PURE__ */ jsx85("circle", { cx: 0, cy: -12, r: 8, fill: t.planet, stroke: "rgba(0,0,0,0.45)", strokeWidth: 3 }),
-        /* @__PURE__ */ jsx85("rect", { x: -10, y: 26, width: 20, height: 6, rx: 2, fill: "#555" })
+      /* @__PURE__ */ jsxs86("g", { transform: `translate(${f1(rx)} ${f1(ry)}) rotate(${f1(head2 + 180)}) scale(1.15)`, children: [
+        /* @__PURE__ */ jsx86("path", { d: "M-8 30 Q0 74 8 30 Z", fill: t.accent }),
+        /* @__PURE__ */ jsx86("path", { d: "M-4 30 Q0 54 4 30 Z", fill: "#FFE15A" }),
+        /* @__PURE__ */ jsx86("path", { d: "M-18 4 L-32 30 L-18 26 Z", fill: t.accent, stroke: "rgba(0,0,0,0.35)", strokeWidth: 2 }),
+        /* @__PURE__ */ jsx86("path", { d: "M18 4 L32 30 L18 26 Z", fill: t.accent, stroke: "rgba(0,0,0,0.35)", strokeWidth: 2 }),
+        /* @__PURE__ */ jsx86("path", { d: "M0 -50 C16 -36 20 -10 18 26 L-18 26 C-20 -10 -16 -36 0 -50 Z", fill: t.body, stroke: "rgba(0,0,0,0.35)", strokeWidth: 2 }),
+        /* @__PURE__ */ jsx86("circle", { cx: 0, cy: -12, r: 8, fill: t.planet, stroke: "rgba(0,0,0,0.45)", strokeWidth: 3 }),
+        /* @__PURE__ */ jsx86("rect", { x: -10, y: 26, width: 20, height: 6, rx: 2, fill: "#555" })
       ] }),
-      /* @__PURE__ */ jsx85("path", { d: arc(476, ...bandFor(label2, 476, label2.length > 26 ? 36 : 40, 31, 149, 128)), fill: "none", stroke: t.band, strokeWidth: 64, strokeLinecap: "round" })
+      /* @__PURE__ */ jsx86("path", { d: arc(476, ...bandFor(label2, 476, label2.length > 26 ? 36 : 40, 31, 149, 128)), fill: "none", stroke: t.band, strokeWidth: 64, strokeLinecap: "round" })
     ] }),
-    /* @__PURE__ */ jsx85(Curve, { text: label2, r: 476, size: label2.length > 26 ? 36 : 40, color: t.ink })
+    /* @__PURE__ */ jsx86(Curve, { text: label2, r: 476, size: label2.length > 26 ? 36 : 40, color: t.ink })
   ] });
 }
 function HiringRing(p, o) {
@@ -13210,20 +13636,20 @@ function HiringRing(p, o) {
     { band: "#DCCBFF", ink: "#2E1E5C", line: "#FFFFFF", bubble: "#FFFFFF", bubbleInk: "#2E1E5C" },
     { band: "#111111", ink: "#FFFFFF", line: "#FFFFFF", bubble: "#FFFFFF", bubbleInk: "#111111" }
   ][p.colour], unit = p.ringText ? `${p.ringText} \xB7 ` : `WE'RE HIRING \xB7 DM @${o.handle.toUpperCase()} \xB7 `, R = 494, size = 38, per = (0.6 + 0.1) * size, fit5 = Math.max(1, Math.floor(2 * Math.PI * R / (unit.length * per))), bx = 690, by2 = 700, bw = 214, bh = 96;
-  return /* @__PURE__ */ jsxs85(Base, { owner: o, children: [
-    /* @__PURE__ */ jsxs85(Svg, { children: [
-      /* @__PURE__ */ jsx85("circle", { cx: C, cy: C, r: R, fill: "none", stroke: "rgba(0,0,0,0.25)", strokeWidth: 88 }),
-      /* @__PURE__ */ jsx85("circle", { cx: C, cy: C, r: R, fill: "none", stroke: t.band, strokeWidth: 78 }),
-      /* @__PURE__ */ jsx85("circle", { cx: C, cy: C, r: R - 32, fill: "none", stroke: t.line, strokeOpacity: 0.6, strokeWidth: 2 }),
-      /* @__PURE__ */ jsx85("circle", { cx: C, cy: C, r: R + 32, fill: "none", stroke: t.line, strokeOpacity: 0.6, strokeWidth: 2 }),
-      /* @__PURE__ */ jsxs85("g", { transform: `rotate(-8 ${bx + bw / 2} ${by2 + bh / 2})`, children: [
-        /* @__PURE__ */ jsx85("path", { d: `M${bx + 40} ${by2 + bh - 4} L${bx + 18} ${by2 + bh + 34} L${bx + 74} ${by2 + bh - 4} Z`, fill: t.bubble, stroke: "rgba(0,0,0,0.3)", strokeWidth: 3 }),
-        /* @__PURE__ */ jsx85("rect", { x: bx, y: by2, width: bw, height: bh, rx: 48, fill: t.bubble, stroke: "rgba(0,0,0,0.3)", strokeWidth: 3 }),
-        /* @__PURE__ */ jsx85("path", { d: `M${bx + 42} ${by2 + bh - 6} L${bx + 72} ${by2 + bh - 6}`, stroke: t.bubble, strokeWidth: 8 })
+  return /* @__PURE__ */ jsxs86(Base, { owner: o, children: [
+    /* @__PURE__ */ jsxs86(Svg, { children: [
+      /* @__PURE__ */ jsx86("circle", { cx: C, cy: C, r: R, fill: "none", stroke: "rgba(0,0,0,0.25)", strokeWidth: 88 }),
+      /* @__PURE__ */ jsx86("circle", { cx: C, cy: C, r: R, fill: "none", stroke: t.band, strokeWidth: 78 }),
+      /* @__PURE__ */ jsx86("circle", { cx: C, cy: C, r: R - 32, fill: "none", stroke: t.line, strokeOpacity: 0.6, strokeWidth: 2 }),
+      /* @__PURE__ */ jsx86("circle", { cx: C, cy: C, r: R + 32, fill: "none", stroke: t.line, strokeOpacity: 0.6, strokeWidth: 2 }),
+      /* @__PURE__ */ jsxs86("g", { transform: `rotate(-8 ${bx + bw / 2} ${by2 + bh / 2})`, children: [
+        /* @__PURE__ */ jsx86("path", { d: `M${bx + 40} ${by2 + bh - 4} L${bx + 18} ${by2 + bh + 34} L${bx + 74} ${by2 + bh - 4} Z`, fill: t.bubble, stroke: "rgba(0,0,0,0.3)", strokeWidth: 3 }),
+        /* @__PURE__ */ jsx86("rect", { x: bx, y: by2, width: bw, height: bh, rx: 48, fill: t.bubble, stroke: "rgba(0,0,0,0.3)", strokeWidth: 3 }),
+        /* @__PURE__ */ jsx86("path", { d: `M${bx + 42} ${by2 + bh - 6} L${bx + 72} ${by2 + bh - 6}`, stroke: t.bubble, strokeWidth: 8 })
       ] })
     ] }),
-    /* @__PURE__ */ jsx85(Curve, { text: unit.repeat(fit5), r: R, size, color: t.ink, at: "ring", start: -90, fill: !0 }),
-    /* @__PURE__ */ jsx85("div", { style: { ...flex6, position: "absolute", left: bx, top: by2, width: bw, height: bh, alignItems: "center", justifyContent: "center", transform: "rotate(-8deg)", fontFamily: "Heavy", fontWeight: 800, fontSize: 44, color: t.bubbleInk }, children: "JOIN US" })
+    /* @__PURE__ */ jsx86(Curve, { text: unit.repeat(fit5), r: R, size, color: t.ink, at: "ring", start: -90, fill: !0 }),
+    /* @__PURE__ */ jsx86("div", { style: { ...flex6, position: "absolute", left: bx, top: by2, width: bw, height: bh, alignItems: "center", justifyContent: "center", transform: "rotate(-8deg)", fontFamily: "Heavy", fontWeight: 800, fontSize: 44, color: t.bubbleInk }, children: "JOIN US" })
   ] });
 }
 function PolaroidRing(p, o) {
@@ -13232,14 +13658,14 @@ function PolaroidRing(p, o) {
     { bg: "#F7D6D0", dot: "rgba(200,120,120,0.28)", frame: "#FFFDF9", ink: "#5A3A3A", tape: "rgba(255,255,255,0.65)" },
     { bg: "#1A1A1A", dot: "rgba(255,255,255,0.12)", frame: "#F4F4F4", ink: "#1A1A1A", tape: "rgba(255,255,255,0.4)" }
   ][p.colour], fw = 580, ph = 500, m = 36, fh = m + ph + 136, first2 = (o.name || o.handle).split(" ")[0], dots = [];
-  for (let y = 18; y < S; y += 46) for (let x = y / 46 % 2 ? 41 : 18; x < S; x += 46) dots.push(/* @__PURE__ */ jsx85("circle", { cx: x, cy: y, r: 5, fill: t.dot }, `${x}-${y}`));
-  return /* @__PURE__ */ jsxs85("div", { style: { ...flex6, position: "relative", width: S, height: S, background: t.bg, overflow: "hidden" }, children: [
-    /* @__PURE__ */ jsx85(Svg, { children: dots }),
-    /* @__PURE__ */ jsxs85("div", { style: { ...flex6, position: "absolute", left: (S - fw) / 2, top: (S - fh) / 2 + 6, width: fw, height: fh, transform: "rotate(-4deg)", background: t.frame, borderRadius: 6, boxShadow: "0 22px 50px rgba(0,0,0,0.35)", flexDirection: "column", alignItems: "center", paddingTop: m }, children: [
-      /* @__PURE__ */ jsx85("div", { style: { ...flex6, width: fw - 2 * m, height: ph, background: "#222", position: "relative" }, children: o.avatar && photo(o.avatar, 0, 0, fw - 2 * m, ph, 0) }),
-      /* @__PURE__ */ jsx85("div", { style: { ...flex6, flex: 1, alignItems: "center", justifyContent: "center", fontFamily: "Display", fontWeight: 500, fontSize: 46, color: t.ink, letterSpacing: -0.5 }, children: `${first2}, ${p.month}` })
+  for (let y = 18; y < S; y += 46) for (let x = y / 46 % 2 ? 41 : 18; x < S; x += 46) dots.push(/* @__PURE__ */ jsx86("circle", { cx: x, cy: y, r: 5, fill: t.dot }, `${x}-${y}`));
+  return /* @__PURE__ */ jsxs86("div", { style: { ...flex6, position: "relative", width: S, height: S, background: t.bg, overflow: "hidden" }, children: [
+    /* @__PURE__ */ jsx86(Svg, { children: dots }),
+    /* @__PURE__ */ jsxs86("div", { style: { ...flex6, position: "absolute", left: (S - fw) / 2, top: (S - fh) / 2 + 6, width: fw, height: fh, transform: "rotate(-4deg)", background: t.frame, borderRadius: 6, boxShadow: "0 22px 50px rgba(0,0,0,0.35)", flexDirection: "column", alignItems: "center", paddingTop: m }, children: [
+      /* @__PURE__ */ jsx86("div", { style: { ...flex6, width: fw - 2 * m, height: ph, background: "#222", position: "relative" }, children: o.avatar && photo(o.avatar, 0, 0, fw - 2 * m, ph, 0) }),
+      /* @__PURE__ */ jsx86("div", { style: { ...flex6, flex: 1, alignItems: "center", justifyContent: "center", fontFamily: "Display", fontWeight: 500, fontSize: 46, color: t.ink, letterSpacing: -0.5 }, children: `${first2}, ${p.month}` })
     ] }),
-    /* @__PURE__ */ jsx85("div", { style: { ...flex6, position: "absolute", left: C - 100, top: (S - fh) / 2 - 18, width: 200, height: 52, background: t.tape, transform: "rotate(3deg)" } })
+    /* @__PURE__ */ jsx86("div", { style: { ...flex6, position: "absolute", left: C - 100, top: (S - fh) / 2 - 18, width: 200, height: 52, background: t.tape, transform: "rotate(3deg)" } })
   ] });
 }
 function BurstRing(p, o) {
@@ -13248,19 +13674,19 @@ function BurstRing(p, o) {
     { burst: "#FF9EC7", edge: "#FFFFFF", ink: "#FFFFFF", ink2: "#7A1645", spark: "#FFFFFF" },
     { burst: "#111111", edge: "#FFFFFF", ink: "#FFFFFF", ink2: "#FFFFFF", spark: "#FFFFFF" }
   ][p.colour], cx = 802, cy = 816, R = 146, r = 121;
-  return /* @__PURE__ */ jsxs85(Base, { owner: o, children: [
-    /* @__PURE__ */ jsxs85(Svg, { children: [
-      /* @__PURE__ */ jsx85("path", { d: starPath3(cx + 8, cy + 12, R, r, 20, -12), fill: "rgba(0,0,0,0.35)" }),
-      /* @__PURE__ */ jsx85("path", { d: starPath3(cx, cy, R, r, 20, -12), fill: t.burst, stroke: t.edge, strokeWidth: 7, strokeLinejoin: "round" }),
-      /* @__PURE__ */ jsx85("circle", { cx, cy, r: r - 18, fill: "none", stroke: t.edge, strokeOpacity: 0.6, strokeWidth: 3, strokeDasharray: "3 9", strokeLinecap: "round" }),
+  return /* @__PURE__ */ jsxs86(Base, { owner: o, children: [
+    /* @__PURE__ */ jsxs86(Svg, { children: [
+      /* @__PURE__ */ jsx86("path", { d: starPath3(cx + 8, cy + 12, R, r, 20, -12), fill: "rgba(0,0,0,0.35)" }),
+      /* @__PURE__ */ jsx86("path", { d: starPath3(cx, cy, R, r, 20, -12), fill: t.burst, stroke: t.edge, strokeWidth: 7, strokeLinejoin: "round" }),
+      /* @__PURE__ */ jsx86("circle", { cx, cy, r: r - 18, fill: "none", stroke: t.edge, strokeOpacity: 0.6, strokeWidth: 3, strokeDasharray: "3 9", strokeLinecap: "round" }),
       sparkle(586, 930, 24, t.spark, 1),
       sparkle(640, 985, 13, t.spark, 2),
       sparkle(948, 600, 20, t.spark, 3),
       sparkle(990, 660, 11, t.spark, 4)
     ] }),
-    /* @__PURE__ */ jsxs85("div", { style: { ...flex6, flexDirection: "column", position: "absolute", left: cx - 130, top: cy - 100, width: 260, height: 200, alignItems: "center", justifyContent: "center", transform: "rotate(-12deg)" }, children: [
-      /* @__PURE__ */ jsx85("span", { style: { fontFamily: "Heavy", fontWeight: 800, fontSize: 96, lineHeight: 0.9, color: t.ink, letterSpacing: -2 }, children: "NEW" }),
-      /* @__PURE__ */ jsx85("span", { style: { fontFamily: "Heavy", fontWeight: 800, fontSize: 52, lineHeight: 1, marginTop: 4, color: t.ink2, letterSpacing: 2 }, children: "PFP!" })
+    /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", position: "absolute", left: cx - 130, top: cy - 100, width: 260, height: 200, alignItems: "center", justifyContent: "center", transform: "rotate(-12deg)" }, children: [
+      /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Heavy", fontWeight: 800, fontSize: 96, lineHeight: 0.9, color: t.ink, letterSpacing: -2 }, children: "NEW" }),
+      /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Heavy", fontWeight: 800, fontSize: 52, lineHeight: 1, marginTop: 4, color: t.ink2, letterSpacing: 2 }, children: "PFP!" })
     ] })
   ] });
 }
@@ -13271,29 +13697,29 @@ function StampRing(p, o) {
     { ink: "#151515", paper: "rgba(255,255,255,0.86)" }
   ][p.colour], box = 330, h = box / 2, rnd = seeded(5), ring = p.ringText ? roundText(p.ringText, 135, 21) : `CERTIFIED HUMAN \xB7 @${o.handle.toUpperCase()} \xB7 WRITES OWN POSTS \xB7 `, specks = Array.from({ length: 70 }, (_, i) => {
     let a = rnd() * 360, rr = 60 + rnd() * 105, [x, y] = pt2(rr, a, h, h);
-    return /* @__PURE__ */ jsx85("circle", { cx: f1(x), cy: f1(y), r: f1(1 + rnd() * 3.2), fill: "#000" }, i);
+    return /* @__PURE__ */ jsx86("circle", { cx: f1(x), cy: f1(y), r: f1(1 + rnd() * 3.2), fill: "#000" }, i);
   });
-  return /* @__PURE__ */ jsx85(Base, { owner: o, children: /* @__PURE__ */ jsxs85("div", { style: { ...flex6, position: "absolute", left: 330 - h, top: 806 - h, width: box, height: box, transform: "rotate(-13deg)" }, children: [
-    /* @__PURE__ */ jsxs85("svg", { width: box, height: box, viewBox: `0 0 ${box} ${box}`, style: { position: "absolute", left: 0, top: 0 }, children: [
-      /* @__PURE__ */ jsx85("defs", { children: /* @__PURE__ */ jsxs85("mask", { id: "ink", children: [
-        /* @__PURE__ */ jsx85("rect", { x: 0, y: 0, width: box, height: box, fill: "#fff" }),
+  return /* @__PURE__ */ jsx86(Base, { owner: o, children: /* @__PURE__ */ jsxs86("div", { style: { ...flex6, position: "absolute", left: 330 - h, top: 806 - h, width: box, height: box, transform: "rotate(-13deg)" }, children: [
+    /* @__PURE__ */ jsxs86("svg", { width: box, height: box, viewBox: `0 0 ${box} ${box}`, style: { position: "absolute", left: 0, top: 0 }, children: [
+      /* @__PURE__ */ jsx86("defs", { children: /* @__PURE__ */ jsxs86("mask", { id: "ink", children: [
+        /* @__PURE__ */ jsx86("rect", { x: 0, y: 0, width: box, height: box, fill: "#fff" }),
         specks
       ] }) }),
-      /* @__PURE__ */ jsx85("circle", { cx: h, cy: h, r: 160, fill: t.paper }),
-      /* @__PURE__ */ jsxs85("g", { mask: "url(#ink)", children: [
-        /* @__PURE__ */ jsx85("circle", { cx: h, cy: h, r: 154, fill: "none", stroke: t.ink, strokeWidth: 9 }),
-        /* @__PURE__ */ jsx85("circle", { cx: h, cy: h, r: 116, fill: "none", stroke: t.ink, strokeWidth: 3.5 }),
-        /* @__PURE__ */ jsx85("circle", { cx: h, cy: h, r: 109, fill: "none", stroke: t.ink, strokeWidth: 1.5 }),
-        /* @__PURE__ */ jsx85("path", { d: `M${h - 86} ${h + 34} L${h + 86} ${h + 34}`, stroke: t.ink, strokeWidth: 2.5 }),
-        /* @__PURE__ */ jsx85("path", { d: `M${h - 86} ${h - 44} L${h + 86} ${h - 44}`, stroke: t.ink, strokeWidth: 2.5 }),
-        /* @__PURE__ */ jsx85("path", { d: starPath3(h - 70, h - 64, 9, 4), fill: t.ink }),
-        /* @__PURE__ */ jsx85("path", { d: starPath3(h, h - 66, 11, 5), fill: t.ink }),
-        /* @__PURE__ */ jsx85("path", { d: starPath3(h + 70, h - 64, 9, 4), fill: t.ink })
+      /* @__PURE__ */ jsx86("circle", { cx: h, cy: h, r: 160, fill: t.paper }),
+      /* @__PURE__ */ jsxs86("g", { mask: "url(#ink)", children: [
+        /* @__PURE__ */ jsx86("circle", { cx: h, cy: h, r: 154, fill: "none", stroke: t.ink, strokeWidth: 9 }),
+        /* @__PURE__ */ jsx86("circle", { cx: h, cy: h, r: 116, fill: "none", stroke: t.ink, strokeWidth: 3.5 }),
+        /* @__PURE__ */ jsx86("circle", { cx: h, cy: h, r: 109, fill: "none", stroke: t.ink, strokeWidth: 1.5 }),
+        /* @__PURE__ */ jsx86("path", { d: `M${h - 86} ${h + 34} L${h + 86} ${h + 34}`, stroke: t.ink, strokeWidth: 2.5 }),
+        /* @__PURE__ */ jsx86("path", { d: `M${h - 86} ${h - 44} L${h + 86} ${h - 44}`, stroke: t.ink, strokeWidth: 2.5 }),
+        /* @__PURE__ */ jsx86("path", { d: starPath3(h - 70, h - 64, 9, 4), fill: t.ink }),
+        /* @__PURE__ */ jsx86("path", { d: starPath3(h, h - 66, 11, 5), fill: t.ink }),
+        /* @__PURE__ */ jsx86("path", { d: starPath3(h + 70, h - 64, 9, 4), fill: t.ink })
       ] })
     ] }),
-    /* @__PURE__ */ jsx85(Curve, { text: ring, r: 135, size: 21, color: t.ink, at: "ring", start: -90, cx: h, cy: h, box, fill: !0 }),
-    /* @__PURE__ */ jsx85("div", { style: { ...flex6, flexDirection: "column", position: "absolute", left: 0, top: h - 42, width: box, alignItems: "center" }, children: /* @__PURE__ */ jsx85("span", { style: { fontFamily: "Heavy", fontWeight: 800, fontSize: 66, lineHeight: 1, color: t.ink, letterSpacing: -1 }, children: "100%" }) }),
-    /* @__PURE__ */ jsx85("div", { style: { ...flex6, position: "absolute", left: 0, top: h + 44, width: box, justifyContent: "center", fontFamily: "Mono", fontWeight: 700, fontSize: 20, letterSpacing: 5, color: t.ink }, children: "NOT A BOT" })
+    /* @__PURE__ */ jsx86(Curve, { text: ring, r: 135, size: 21, color: t.ink, at: "ring", start: -90, cx: h, cy: h, box, fill: !0 }),
+    /* @__PURE__ */ jsx86("div", { style: { ...flex6, flexDirection: "column", position: "absolute", left: 0, top: h - 42, width: box, alignItems: "center" }, children: /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Heavy", fontWeight: 800, fontSize: 66, lineHeight: 1, color: t.ink, letterSpacing: -1 }, children: "100%" }) }),
+    /* @__PURE__ */ jsx86("div", { style: { ...flex6, position: "absolute", left: 0, top: h + 44, width: box, justifyContent: "center", fontFamily: "Mono", fontWeight: 700, fontSize: 20, letterSpacing: 5, color: t.ink }, children: "NOT A BOT" })
   ] }) });
 }
 var DEFS2 = [
@@ -13328,54 +13754,54 @@ var shout2_exports = {};
 __export(shout2_exports, {
   SHOUT2_CARDS: () => SHOUT2_CARDS
 });
-import { jsx as jsx86, jsxs as jsxs86 } from "react/jsx-runtime";
+import { jsx as jsx87, jsxs as jsxs87 } from "react/jsx-runtime";
 var fit4 = (s, base, n) => s.length > n ? Math.round(base * n / s.length) : base, firstName2 = (name) => name.trim().split(/\s+/)[0] || name, lastName = (name) => {
   let p = name.trim().split(/\s+/);
   return p[p.length - 1] || name;
 }, pick4 = (c, arr) => arr[c] ?? arr[0];
 var big2 = (p) => p.st.total;
 function Foot({ owner, mark, color, label: label2 }) {
-  return /* @__PURE__ */ jsxs86("div", { style: { ...flex6, position: "relative", justifyContent: "space-between", alignItems: "center", fontSize: 24, color, fontFamily: "Sans" }, children: [
-    /* @__PURE__ */ jsxs86("div", { style: { ...flex6, alignItems: "center", gap: 14 }, children: [
+  return /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "relative", justifyContent: "space-between", alignItems: "center", fontSize: 24, color, fontFamily: "Sans" }, children: [
+    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, alignItems: "center", gap: 14 }, children: [
       owner.avatar && photo(owner.avatar, 0, 0, 52, 52, 52, { position: "relative" }),
-      /* @__PURE__ */ jsx86("span", { children: label2 ?? `@${owner.handle}` })
+      /* @__PURE__ */ jsx87("span", { children: label2 ?? `@${owner.handle}` })
     ] }),
-    mark && /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Mono", fontSize: 18 }, children: "Made with Orbit Cards" })
+    mark && /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Mono", fontSize: 18 }, children: "Made with Orbit Cards" })
   ] });
 }
-var kicker = (text2, color, extra = {}) => /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Mono", fontSize: 22, letterSpacing: 4, color, ...extra }, children: text2 }), sub = (c, a) => c.replace(/^#(..)(..)(..)$/, (_m, r, g, b) => `rgba(${parseInt(r, 16)},${parseInt(g, 16)},${parseInt(b, 16)},${a})`), WANTED = [
+var kicker = (text2, color, extra = {}) => /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Mono", fontSize: 22, letterSpacing: 4, color, ...extra }, children: text2 }), sub = (c, a) => c.replace(/^#(..)(..)(..)$/, (_m, r, g, b) => `rgba(${parseInt(r, 16)},${parseInt(g, 16)},${parseInt(b, 16)},${a})`), WANTED = [
   { wall: "#5A3B22", paper: "#EBDAB2", edge: "#B8945A", ink: "#3A2414", accent: "#9A2E1E", tint: "rgba(150,95,30,0.2)", pin: "#B33A2B", foot: "rgba(255,240,215,0.78)" },
   { wall: "#0D0C15", paper: "#1C1A29", edge: "#3A3652", ink: "#FFD23F", accent: "#FF5A36", tint: "rgba(30,20,70,0.16)", pin: "#FF5A36", foot: "rgba(244,241,236,0.6)" },
   { wall: "#FF5A36", paper: "#FFF4DA", edge: "#E8C98A", ink: "#16130F", accent: "#E5402A", tint: "rgba(0,0,0,0)", pin: "#16130F", foot: "rgba(22,19,15,0.75)" }
 ];
 function WantedCard(p, size, owner) {
-  let [w, h] = dims2(size), L2 = pick4(p.colour, WANTED), sq = size === "square", st = size === "story", name = p.who.name, d = sq ? 250 : st ? 620 : 320, pin2 = (k, s) => /* @__PURE__ */ jsx86("div", { style: { ...flex6, position: "absolute", width: 22, height: 22, borderRadius: 22, background: L2.pin, boxShadow: "0 3px 4px rgba(0,0,0,0.35)", ...s } }, k);
-  return /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", width: w, height: h, background: L2.wall, padding: 72, gap: 28, fontFamily: "Sans" }, children: [
-    /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flex: 1, position: "relative", flexDirection: "column", alignItems: "center", justifyContent: "space-between", background: L2.paper, padding: sq ? "40px 56px" : "64px 64px", color: L2.ink, textAlign: "center", boxShadow: `inset 0 0 0 14px ${L2.paper}, inset 0 0 0 17px ${L2.edge}, 0 24px 50px rgba(0,0,0,0.35)` }, children: [
+  let [w, h] = dims2(size), L2 = pick4(p.colour, WANTED), sq = size === "square", st = size === "story", name = p.who.name, d = sq ? 250 : st ? 620 : 320, pin2 = (k, s) => /* @__PURE__ */ jsx87("div", { style: { ...flex6, position: "absolute", width: 22, height: 22, borderRadius: 22, background: L2.pin, boxShadow: "0 3px 4px rgba(0,0,0,0.35)", ...s } }, k);
+  return /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", width: w, height: h, background: L2.wall, padding: 72, gap: 28, fontFamily: "Sans" }, children: [
+    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flex: 1, position: "relative", flexDirection: "column", alignItems: "center", justifyContent: "space-between", background: L2.paper, padding: sq ? "40px 56px" : "64px 64px", color: L2.ink, textAlign: "center", boxShadow: `inset 0 0 0 14px ${L2.paper}, inset 0 0 0 17px ${L2.edge}, 0 24px 50px rgba(0,0,0,0.35)` }, children: [
       pin2("a", { left: 26, top: 26 }),
       pin2("b", { right: 26, top: 26 }),
       pin2("c", { left: 26, bottom: 26 }),
       pin2("d", { right: 26, bottom: 26 }),
-      /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Heavy", fontSize: sq ? 136 : st ? 172 : 160, lineHeight: 0.9, letterSpacing: 6 }, children: "WANTED" }),
-      /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", alignItems: "center" }, children: [
-        /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Mono", fontSize: sq ? 20 : 24, letterSpacing: 8 }, children: "FOR BEING THE" }),
-        /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Heavy", fontSize: sq ? 54 : st ? 78 : 66, color: L2.accent, marginTop: 4, lineHeight: 1 }, children: "MOST SUPPORTIVE" })
+      /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Heavy", fontSize: sq ? 136 : st ? 172 : 160, lineHeight: 0.9, letterSpacing: 6 }, children: "WANTED" }),
+      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", alignItems: "center" }, children: [
+        /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Mono", fontSize: sq ? 20 : 24, letterSpacing: 8 }, children: "FOR BEING THE" }),
+        /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Heavy", fontSize: sq ? 54 : st ? 78 : 66, color: L2.accent, marginTop: 4, lineHeight: 1 }, children: "MOST SUPPORTIVE" })
       ] }),
-      /* @__PURE__ */ jsxs86("div", { style: { ...flex6, position: "relative", padding: 8, background: L2.ink }, children: [
+      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "relative", padding: 8, background: L2.ink }, children: [
         photo(p.who.avatar, 0, 0, d, d, 0, { position: "relative" }),
-        /* @__PURE__ */ jsx86("div", { style: { ...flex6, position: "absolute", left: 8, top: 8, width: d, height: d, background: L2.tint } })
+        /* @__PURE__ */ jsx87("div", { style: { ...flex6, position: "absolute", left: 8, top: 8, width: d, height: d, background: L2.tint } })
       ] }),
-      /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", alignItems: "center" }, children: [
-        /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Display", fontWeight: 700, fontSize: fit4(name, sq ? 52 : st ? 76 : 64, 14), lineHeight: 1 }, children: name }),
-        /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Mono", fontSize: sq ? 22 : 26, marginTop: 8 }, children: `@${p.who.handle}` })
+      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", alignItems: "center" }, children: [
+        /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Display", fontWeight: 700, fontSize: fit4(name, sq ? 52 : st ? 76 : 64, 14), lineHeight: 1 }, children: name }),
+        /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Mono", fontSize: sq ? 22 : 26, marginTop: 8 }, children: `@${p.who.handle}` })
       ] }),
-      !sq && /* @__PURE__ */ jsx86("span", { style: { fontSize: st ? 32 : 25, lineHeight: 1.4, maxWidth: 740 }, children: `Last seen in @${owner.handle}'s replies. Known for ${between(p.st)} in the last 30 days.` }),
-      /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", alignItems: "center", alignSelf: "stretch", borderTop: `3px solid ${L2.ink}`, borderBottom: `3px solid ${L2.ink}`, padding: sq ? "8px 0 10px" : "14px 0 16px" }, children: [
-        /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Mono", fontSize: 20, letterSpacing: 8 }, children: "REWARD" }),
-        /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Display", fontWeight: 700, fontSize: sq ? 44 : st ? 66 : 56, lineHeight: 1.1 }, children: "Eternal gratitude" })
+      !sq && /* @__PURE__ */ jsx87("span", { style: { fontSize: st ? 32 : 25, lineHeight: 1.4, maxWidth: 740 }, children: `Last seen in @${owner.handle}'s replies. Known for ${between(p.st)} in the last 30 days.` }),
+      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", alignItems: "center", alignSelf: "stretch", borderTop: `3px solid ${L2.ink}`, borderBottom: `3px solid ${L2.ink}`, padding: sq ? "8px 0 10px" : "14px 0 16px" }, children: [
+        /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Mono", fontSize: 20, letterSpacing: 8 }, children: "REWARD" }),
+        /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Display", fontWeight: 700, fontSize: sq ? 44 : st ? 66 : 56, lineHeight: 1.1 }, children: "Eternal gratitude" })
       ] })
     ] }),
-    /* @__PURE__ */ jsx86(Foot, { owner, mark: p.mark, color: L2.foot, label: `Posted by @${owner.handle}` })
+    /* @__PURE__ */ jsx87(Foot, { owner, mark: p.mark, color: L2.foot, label: `Posted by @${owner.handle}` })
   ] });
 }
 var COVER = [
@@ -13384,35 +13810,35 @@ var COVER = [
   { bg: "#E9E2D4", mast: "#16130F", ink: "#16130F", sub: "rgba(22,19,15,0.66)", chip: "#C2551F", chipInk: "#FFFFFF", frame: "#16130F", big: "#C2551F" }
 ];
 function CoverCard(p, size, owner) {
-  let [w, h] = dims2(size), L2 = pick4(p.colour, COVER), sq = size === "square", st = size === "story", name = p.who.name, d = sq ? 420 : st ? 936 : 560, cw = 936 - d - 36, lines = [[num(big2(p)), "replies, mentions and reposts between us in 30 days."], [p.st.peakHour ?? "LATELY", p.st.peakHour ? "When the threads happen" : "Inside the threads everyone reads"], ["EXCLUSIVE", `What @${owner.handle} really thinks of them`]], line2 = ([k, t], i, wd) => /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", width: wd, borderTop: `3px solid ${L2.ink}`, paddingTop: 12 }, children: [
-    /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Heavy", fontSize: sq ? 44 : st ? 46 : 60, lineHeight: 1, color: i === 0 ? L2.big : L2.ink }, children: k }),
-    /* @__PURE__ */ jsx86("span", { style: { fontSize: sq ? 21 : 26, lineHeight: 1.3, marginTop: 8, color: L2.sub }, children: t })
+  let [w, h] = dims2(size), L2 = pick4(p.colour, COVER), sq = size === "square", st = size === "story", name = p.who.name, d = sq ? 420 : st ? 936 : 560, cw = 936 - d - 36, lines = [[num(big2(p)), "replies, mentions and reposts between us in 30 days."], [p.st.peakHour ?? "LATELY", p.st.peakHour ? "When the threads happen" : "Inside the threads everyone reads"], ["EXCLUSIVE", `What @${owner.handle} really thinks of them`]], line2 = ([k, t], i, wd) => /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", width: wd, borderTop: `3px solid ${L2.ink}`, paddingTop: 12 }, children: [
+    /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Heavy", fontSize: sq ? 44 : st ? 46 : 60, lineHeight: 1, color: i === 0 ? L2.big : L2.ink }, children: k }),
+    /* @__PURE__ */ jsx87("span", { style: { fontSize: sq ? 21 : 26, lineHeight: 1.3, marginTop: 8, color: L2.sub }, children: t })
   ] }, i);
-  return /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", justifyContent: "space-between", width: w, height: h, background: L2.bg, padding: 72, color: L2.ink, fontFamily: "Sans" }, children: [
-    /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column" }, children: [
-      /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Heavy", fontSize: sq ? 172 : 196, lineHeight: 0.82, letterSpacing: -6, color: L2.mast, alignSelf: "center" }, children: "ORBIT" }),
-      /* @__PURE__ */ jsxs86("div", { style: { ...flex6, justifyContent: "space-between", fontFamily: "Mono", fontSize: 20, letterSpacing: 3, marginTop: 18, color: L2.sub }, children: [
-        /* @__PURE__ */ jsx86("span", { children: `${p.when.month} ${p.when.year}` }),
-        /* @__PURE__ */ jsx86("span", { children: "THE SUPPORT ISSUE" }),
-        /* @__PURE__ */ jsx86("span", { children: `NO. ${num(big2(p))}` })
+  return /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", justifyContent: "space-between", width: w, height: h, background: L2.bg, padding: 72, color: L2.ink, fontFamily: "Sans" }, children: [
+    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column" }, children: [
+      /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Heavy", fontSize: sq ? 172 : 196, lineHeight: 0.82, letterSpacing: -6, color: L2.mast, alignSelf: "center" }, children: "ORBIT" }),
+      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, justifyContent: "space-between", fontFamily: "Mono", fontSize: 20, letterSpacing: 3, marginTop: 18, color: L2.sub }, children: [
+        /* @__PURE__ */ jsx87("span", { children: `${p.when.month} ${p.when.year}` }),
+        /* @__PURE__ */ jsx87("span", { children: "THE SUPPORT ISSUE" }),
+        /* @__PURE__ */ jsx87("span", { children: `NO. ${num(big2(p))}` })
       ] })
     ] }),
-    st ? /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", gap: 40 }, children: [
-      /* @__PURE__ */ jsx86("div", { style: { ...flex6, padding: 8, background: L2.frame }, children: photo(p.who.avatar, 0, 0, d - 16, d - 16, 0, { position: "relative" }) }),
-      /* @__PURE__ */ jsx86("div", { style: { ...flex6, justifyContent: "space-between" }, children: lines.map((l, i) => line2(l, i, 280)) })
-    ] }) : /* @__PURE__ */ jsxs86("div", { style: { ...flex6, justifyContent: "space-between", alignItems: "stretch" }, children: [
-      /* @__PURE__ */ jsx86("div", { style: { ...flex6, flexDirection: "column", justifyContent: "space-between", width: cw }, children: lines.map((l, i) => line2(l, i, cw)) }),
-      /* @__PURE__ */ jsx86("div", { style: { ...flex6, padding: 8, background: L2.frame }, children: photo(p.who.avatar, 0, 0, d - 16, d - 16, 0, { position: "relative" }) })
+    st ? /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", gap: 40 }, children: [
+      /* @__PURE__ */ jsx87("div", { style: { ...flex6, padding: 8, background: L2.frame }, children: photo(p.who.avatar, 0, 0, d - 16, d - 16, 0, { position: "relative" }) }),
+      /* @__PURE__ */ jsx87("div", { style: { ...flex6, justifyContent: "space-between" }, children: lines.map((l, i) => line2(l, i, 280)) })
+    ] }) : /* @__PURE__ */ jsxs87("div", { style: { ...flex6, justifyContent: "space-between", alignItems: "stretch" }, children: [
+      /* @__PURE__ */ jsx87("div", { style: { ...flex6, flexDirection: "column", justifyContent: "space-between", width: cw }, children: lines.map((l, i) => line2(l, i, cw)) }),
+      /* @__PURE__ */ jsx87("div", { style: { ...flex6, padding: 8, background: L2.frame }, children: photo(p.who.avatar, 0, 0, d - 16, d - 16, 0, { position: "relative" }) })
     ] }),
-    /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column" }, children: [
-      /* @__PURE__ */ jsxs86("div", { style: { ...flex6, alignItems: "center", gap: 18 }, children: [
-        /* @__PURE__ */ jsx86("span", { style: { background: L2.chip, color: L2.chipInk, fontFamily: "Mono", fontWeight: 700, fontSize: 20, letterSpacing: 3, padding: "6px 14px" }, children: "COVER STAR" }),
-        /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Mono", fontSize: 22, color: L2.sub }, children: `@${p.who.handle}` })
+    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column" }, children: [
+      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, alignItems: "center", gap: 18 }, children: [
+        /* @__PURE__ */ jsx87("span", { style: { background: L2.chip, color: L2.chipInk, fontFamily: "Mono", fontWeight: 700, fontSize: 20, letterSpacing: 3, padding: "6px 14px" }, children: "COVER STAR" }),
+        /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Mono", fontSize: 22, color: L2.sub }, children: `@${p.who.handle}` })
       ] }),
-      /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Heavy", fontSize: fit4(name, sq ? 76 : 92, 12), lineHeight: 1, marginTop: 14 }, children: name }),
-      /* @__PURE__ */ jsx86("span", { style: { fontSize: sq ? 26 : 30, color: L2.sub, marginTop: 10 }, children: "on showing up in my replies" })
+      /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Heavy", fontSize: fit4(name, sq ? 76 : 92, 12), lineHeight: 1, marginTop: 14 }, children: name }),
+      /* @__PURE__ */ jsx87("span", { style: { fontSize: sq ? 26 : 30, color: L2.sub, marginTop: 10 }, children: "on showing up in my replies" })
     ] }),
-    /* @__PURE__ */ jsx86(Foot, { owner, mark: p.mark, color: L2.sub, label: `Editor: @${owner.handle}` })
+    /* @__PURE__ */ jsx87(Foot, { owner, mark: p.mark, color: L2.sub, label: `Editor: @${owner.handle}` })
   ] });
 }
 var PRESS = [
@@ -13421,55 +13847,55 @@ var PRESS = [
   { bg: "#FBE1CE", ink: "#2A1A12", sub: "rgba(42,26,18,0.68)", accent: "#9B2F1E", photo: "rgba(155,47,30,0.08)" }
 ];
 function FrontPageCard(p, size, owner) {
-  let [w, h] = dims2(size), L2 = pick4(p.colour, PRESS), sq = size === "square", st = size === "story", name = p.who.name, rules = (gap) => /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", gap }, children: [
-    /* @__PURE__ */ jsx86("div", { style: { ...flex6, height: 4, background: L2.ink } }),
-    /* @__PURE__ */ jsx86("div", { style: { ...flex6, height: 1, background: L2.ink } })
+  let [w, h] = dims2(size), L2 = pick4(p.colour, PRESS), sq = size === "square", st = size === "story", name = p.who.name, rules = (gap) => /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", gap }, children: [
+    /* @__PURE__ */ jsx87("div", { style: { ...flex6, height: 4, background: L2.ink } }),
+    /* @__PURE__ */ jsx87("div", { style: { ...flex6, height: 1, background: L2.ink } })
   ] }), body = [
     `TIMELINE, ${p.when.d} ${p.when.mon}. ${name} and @${owner.handle} traded ${plural(big2(p), "reply or mention", "replies and mentions")} in the last 30 days, according to figures released this morning.`,
     `${p.st.reposts ? `${plural(p.st.reposts, "repost")} were also recorded. ` : ""}They talked on ${plural(p.st.days, "day")}${p.st.streak > 1 ? `, ${p.st.streak} of them in a row` : ""}.`,
     `${p.st.first ? `The first exchange this month was on ${p.st.first}. ` : ""}${p.st.peakHour ? `Most of it happens around ${p.st.peakHour.toLowerCase()}. ` : ""}Experts expect the trend to continue.`,
     `@${p.who.handle} has been asked for comment.`
-  ], para = (t, k) => /* @__PURE__ */ jsx86("span", { style: { fontSize: sq ? 19 : st ? 25 : 22, lineHeight: 1.45, marginBottom: 12 }, children: t }, k), pw = sq ? 340 : 410, pic = (wd, ht) => /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", width: wd }, children: [
-    /* @__PURE__ */ jsxs86("div", { style: { ...flex6, position: "relative", width: wd, height: ht }, children: [
+  ], para = (t, k) => /* @__PURE__ */ jsx87("span", { style: { fontSize: sq ? 19 : st ? 25 : 22, lineHeight: 1.45, marginBottom: 12 }, children: t }, k), pw = sq ? 340 : 410, pic = (wd, ht) => /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", width: wd }, children: [
+    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "relative", width: wd, height: ht }, children: [
       photo(p.who.avatar, 0, 0, wd, ht, 0),
-      /* @__PURE__ */ jsx86("div", { style: { ...flex6, position: "absolute", left: 0, top: 0, width: wd, height: ht, background: L2.photo } })
+      /* @__PURE__ */ jsx87("div", { style: { ...flex6, position: "absolute", left: 0, top: 0, width: wd, height: ht, background: L2.photo } })
     ] }),
-    /* @__PURE__ */ jsx86("span", { style: { fontSize: sq ? 16 : 18, lineHeight: 1.35, color: L2.sub, marginTop: 10, fontStyle: "normal" }, children: `${name} (pictured), seen often in @${owner.handle}'s replies.` })
+    /* @__PURE__ */ jsx87("span", { style: { fontSize: sq ? 16 : 18, lineHeight: 1.35, color: L2.sub, marginTop: 10, fontStyle: "normal" }, children: `${name} (pictured), seen often in @${owner.handle}'s replies.` })
   ] });
-  return /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", justifyContent: "space-between", width: w, height: h, background: L2.bg, padding: 72, color: L2.ink, fontFamily: "Sans" }, children: [
-    /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", gap: 12 }, children: [
+  return /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", justifyContent: "space-between", width: w, height: h, background: L2.bg, padding: 72, color: L2.ink, fontFamily: "Sans" }, children: [
+    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", gap: 12 }, children: [
       rules(4),
-      /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Display", fontWeight: 700, fontSize: sq ? 80 : st ? 104 : 92, lineHeight: 1, alignSelf: "center", letterSpacing: -1 }, children: "The Orbit Times" }),
-      /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column-reverse", gap: 4 }, children: [
-        /* @__PURE__ */ jsx86("div", { style: { ...flex6, height: 4, background: L2.ink } }),
-        /* @__PURE__ */ jsx86("div", { style: { ...flex6, height: 1, background: L2.ink } })
+      /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Display", fontWeight: 700, fontSize: sq ? 80 : st ? 104 : 92, lineHeight: 1, alignSelf: "center", letterSpacing: -1 }, children: "The Orbit Times" }),
+      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column-reverse", gap: 4 }, children: [
+        /* @__PURE__ */ jsx87("div", { style: { ...flex6, height: 4, background: L2.ink } }),
+        /* @__PURE__ */ jsx87("div", { style: { ...flex6, height: 1, background: L2.ink } })
       ] }),
-      /* @__PURE__ */ jsxs86("div", { style: { ...flex6, justifyContent: "space-between", fontFamily: "Mono", fontSize: sq ? 16 : 18, letterSpacing: 2, color: L2.sub }, children: [
-        /* @__PURE__ */ jsx86("span", { children: `VOL. ${p.when.year}` }),
-        /* @__PURE__ */ jsx86("span", { children: `${p.when.d} ${p.when.month} ${p.when.year}` }),
-        /* @__PURE__ */ jsx86("span", { children: "LATE EDITION" })
+      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, justifyContent: "space-between", fontFamily: "Mono", fontSize: sq ? 16 : 18, letterSpacing: 2, color: L2.sub }, children: [
+        /* @__PURE__ */ jsx87("span", { children: `VOL. ${p.when.year}` }),
+        /* @__PURE__ */ jsx87("span", { children: `${p.when.d} ${p.when.month} ${p.when.year}` }),
+        /* @__PURE__ */ jsx87("span", { children: "LATE EDITION" })
       ] })
     ] }),
-    /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column" }, children: [
+    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column" }, children: [
       kicker("EXCLUSIVE", L2.accent, { fontWeight: 700, fontSize: sq ? 18 : 22 }),
-      /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Heavy", fontSize: sq ? 64 : st ? 96 : 72, lineHeight: 0.98, marginTop: 8 }, children: `LOCAL LEGEND: ${num(big2(p))} REPLIES AND MENTIONS IN 30 DAYS` }),
-      /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Display", fontWeight: 500, fontSize: sq ? 26 : 32, lineHeight: 1.25, marginTop: 14, color: L2.sub }, children: `@${p.who.handle} named one of the best people on the timeline. Nobody is surprised.` })
+      /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Heavy", fontSize: sq ? 64 : st ? 96 : 72, lineHeight: 0.98, marginTop: 8 }, children: `LOCAL LEGEND: ${num(big2(p))} REPLIES AND MENTIONS IN 30 DAYS` }),
+      /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Display", fontWeight: 500, fontSize: sq ? 26 : 32, lineHeight: 1.25, marginTop: 14, color: L2.sub }, children: `@${p.who.handle} named one of the best people on the timeline. Nobody is surprised.` })
     ] }),
-    st ? /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", gap: 28 }, children: [
+    st ? /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", gap: 28 }, children: [
       pic(936, 620),
-      /* @__PURE__ */ jsxs86("div", { style: { ...flex6, gap: 28 }, children: [
-        /* @__PURE__ */ jsx86("div", { style: { ...flex6, flexDirection: "column", flex: 1 }, children: body.slice(0, 2).map(para) }),
-        /* @__PURE__ */ jsx86("div", { style: { ...flex6, width: 1, background: L2.sub } }),
-        /* @__PURE__ */ jsx86("div", { style: { ...flex6, flexDirection: "column", flex: 1 }, children: body.slice(2).map(para) })
+      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, gap: 28 }, children: [
+        /* @__PURE__ */ jsx87("div", { style: { ...flex6, flexDirection: "column", flex: 1 }, children: body.slice(0, 2).map(para) }),
+        /* @__PURE__ */ jsx87("div", { style: { ...flex6, width: 1, background: L2.sub } }),
+        /* @__PURE__ */ jsx87("div", { style: { ...flex6, flexDirection: "column", flex: 1 }, children: body.slice(2).map(para) })
       ] })
-    ] }) : /* @__PURE__ */ jsxs86("div", { style: { ...flex6, gap: 28, alignItems: "flex-start" }, children: [
+    ] }) : /* @__PURE__ */ jsxs87("div", { style: { ...flex6, gap: 28, alignItems: "flex-start" }, children: [
       pic(pw, sq ? 300 : 400),
-      /* @__PURE__ */ jsx86("div", { style: { ...flex6, width: 1, alignSelf: "stretch", background: L2.sub } }),
-      /* @__PURE__ */ jsx86("div", { style: { ...flex6, flexDirection: "column", flex: 1 }, children: body.slice(0, sq ? 3 : 4).map(para) })
+      /* @__PURE__ */ jsx87("div", { style: { ...flex6, width: 1, alignSelf: "stretch", background: L2.sub } }),
+      /* @__PURE__ */ jsx87("div", { style: { ...flex6, flexDirection: "column", flex: 1 }, children: body.slice(0, sq ? 3 : 4).map(para) })
     ] }),
-    /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", gap: 18 }, children: [
-      /* @__PURE__ */ jsx86("div", { style: { ...flex6, height: 2, background: L2.ink } }),
-      /* @__PURE__ */ jsx86(Foot, { owner, mark: p.mark, color: L2.sub, label: `Reporting by @${owner.handle}` })
+    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", gap: 18 }, children: [
+      /* @__PURE__ */ jsx87("div", { style: { ...flex6, height: 2, background: L2.ink } }),
+      /* @__PURE__ */ jsx87(Foot, { owner, mark: p.mark, color: L2.sub, label: `Reporting by @${owner.handle}` })
     ] })
   ] });
 }
@@ -13479,41 +13905,41 @@ var PASS = [
   { bg: "#1E2B24", strap: "#C9CED6", strap2: "#8A929E", band: "#16130F", bandInk: "#E8B94A", card: "#F2EDE3", ink: "#16130F", sub: "#5E574C", foot: "rgba(242,237,227,0.66)" }
 ];
 function PassCard(p, size, owner) {
-  let [w, h] = dims2(size), L2 = pick4(p.colour, PASS), sq = size === "square", st = size === "story", name = p.who.name, pw = sq ? 640 : st ? 820 : 640, lh = sq ? 160 : st ? 290 : 130, d = sq ? 300 : st ? 640 : 340, cx = w / 2, straps = /* @__PURE__ */ jsxs86("svg", { width: w, height: lh + 30, viewBox: `0 0 ${w} ${lh + 30}`, style: { position: "absolute", left: 0, top: 0 }, children: [
-    /* @__PURE__ */ jsx86("path", { d: `M${cx - 190} 0 L${cx - 22} ${lh} L${cx - 2} ${lh} L${cx - 140} 0 Z`, fill: L2.strap }),
-    /* @__PURE__ */ jsx86("path", { d: `M${cx + 190} 0 L${cx + 22} ${lh} L${cx + 2} ${lh} L${cx + 140} 0 Z`, fill: L2.strap2 }),
-    /* @__PURE__ */ jsx86("rect", { x: cx - 30, y: lh - 8, width: 60, height: 26, rx: 6, fill: "#B9BEC7" }),
-    /* @__PURE__ */ jsx86("rect", { x: cx - 10, y: lh + 14, width: 20, height: 16, rx: 3, fill: "#8F959F" })
+  let [w, h] = dims2(size), L2 = pick4(p.colour, PASS), sq = size === "square", st = size === "story", name = p.who.name, pw = sq ? 640 : st ? 820 : 640, lh = sq ? 160 : st ? 290 : 130, d = sq ? 300 : st ? 640 : 340, cx = w / 2, straps = /* @__PURE__ */ jsxs87("svg", { width: w, height: lh + 30, viewBox: `0 0 ${w} ${lh + 30}`, style: { position: "absolute", left: 0, top: 0 }, children: [
+    /* @__PURE__ */ jsx87("path", { d: `M${cx - 190} 0 L${cx - 22} ${lh} L${cx - 2} ${lh} L${cx - 140} 0 Z`, fill: L2.strap }),
+    /* @__PURE__ */ jsx87("path", { d: `M${cx + 190} 0 L${cx + 22} ${lh} L${cx + 2} ${lh} L${cx + 140} 0 Z`, fill: L2.strap2 }),
+    /* @__PURE__ */ jsx87("rect", { x: cx - 30, y: lh - 8, width: 60, height: 26, rx: 6, fill: "#B9BEC7" }),
+    /* @__PURE__ */ jsx87("rect", { x: cx - 10, y: lh + 14, width: 20, height: 16, rx: 3, fill: "#8F959F" })
   ] });
-  return /* @__PURE__ */ jsxs86("div", { style: { ...flex6, position: "relative", width: w, height: h, background: L2.bg, fontFamily: "Sans" }, children: [
+  return /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "relative", width: w, height: h, background: L2.bg, fontFamily: "Sans" }, children: [
     straps,
-    /* @__PURE__ */ jsxs86("div", { style: { ...flex6, position: "absolute", left: 0, top: 0, width: w, height: h, flexDirection: "column", alignItems: "center", justifyContent: "space-between", padding: `${lh + 30}px 72px 72px` }, children: [
-      /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", width: pw, background: L2.card, borderRadius: 26, overflow: "hidden", color: L2.ink, boxShadow: "0 30px 60px rgba(0,0,0,0.35)" }, children: [
-        /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", alignItems: "center", background: L2.band, padding: sq ? "16px 0 14px" : "26px 0 22px" }, children: [
-          /* @__PURE__ */ jsx86("div", { style: { ...flex6, width: 110, height: 18, borderRadius: 9, background: L2.bg.startsWith("linear") ? "#1A0E2C" : L2.bg, marginBottom: sq ? 10 : 18 } }),
-          /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Heavy", fontSize: sq ? 52 : st ? 82 : 64, lineHeight: 1, letterSpacing: 4, color: L2.bandInk }, children: "ALL ACCESS" })
+    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "absolute", left: 0, top: 0, width: w, height: h, flexDirection: "column", alignItems: "center", justifyContent: "space-between", padding: `${lh + 30}px 72px 72px` }, children: [
+      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", width: pw, background: L2.card, borderRadius: 26, overflow: "hidden", color: L2.ink, boxShadow: "0 30px 60px rgba(0,0,0,0.35)" }, children: [
+        /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", alignItems: "center", background: L2.band, padding: sq ? "16px 0 14px" : "26px 0 22px" }, children: [
+          /* @__PURE__ */ jsx87("div", { style: { ...flex6, width: 110, height: 18, borderRadius: 9, background: L2.bg.startsWith("linear") ? "#1A0E2C" : L2.bg, marginBottom: sq ? 10 : 18 } }),
+          /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Heavy", fontSize: sq ? 52 : st ? 82 : 64, lineHeight: 1, letterSpacing: 4, color: L2.bandInk }, children: "ALL ACCESS" })
         ] }),
-        /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: sq ? "row" : "column", alignItems: "center", padding: sq ? "26px 30px" : "36px 40px", gap: sq ? 26 : 22 }, children: [
+        /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: sq ? "row" : "column", alignItems: "center", padding: sq ? "26px 30px" : "36px 40px", gap: sq ? 26 : 22 }, children: [
           photo(p.who.avatar, 0, 0, d, d, 18, { position: "relative" }),
-          /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", alignItems: sq ? "flex-start" : "center", ...sq ? { flex: 1 } : {} }, children: [
-            /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Mono", fontSize: 18, letterSpacing: 4, color: L2.sub }, children: "VIP \xB7 FRONT ROW" }),
-            /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Display", fontWeight: 700, fontSize: fit4(name, sq ? 46 : st ? 70 : 56, sq ? 10 : 14), lineHeight: 1.05, marginTop: 8, textAlign: sq ? "left" : "center" }, children: name }),
-            /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Mono", fontSize: sq ? 22 : 26, color: L2.sub, marginTop: 6 }, children: `@${p.who.handle}` })
+          /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", alignItems: sq ? "flex-start" : "center", ...sq ? { flex: 1 } : {} }, children: [
+            /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Mono", fontSize: 18, letterSpacing: 4, color: L2.sub }, children: "VIP \xB7 FRONT ROW" }),
+            /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Display", fontWeight: 700, fontSize: fit4(name, sq ? 46 : st ? 70 : 56, sq ? 10 : 14), lineHeight: 1.05, marginTop: 8, textAlign: sq ? "left" : "center" }, children: name }),
+            /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Mono", fontSize: sq ? 22 : 26, color: L2.sub, marginTop: 6 }, children: `@${p.who.handle}` })
           ] })
         ] }),
-        /* @__PURE__ */ jsx86("div", { style: { ...flex6, borderTop: `2px dashed ${L2.sub}`, margin: sq ? "0 30px" : "0 40px" } }),
-        /* @__PURE__ */ jsx86("div", { style: { ...flex6, justifyContent: "space-between", padding: sq ? "18px 30px" : "26px 40px" }, children: [[num(p.st.toThem), "SHOWS"], [num(p.st.fromThem), "ENCORES"], [num(p.st.reposts), "STAGE DIVES"]].map(([v, l], k) => /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", alignItems: k === 0 ? "flex-start" : k === 2 ? "flex-end" : "center" }, children: [
-          /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Heavy", fontSize: sq ? 44 : st ? 64 : 52, lineHeight: 1 }, children: v }),
-          /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Mono", fontSize: sq ? 16 : 18, letterSpacing: 2, color: L2.sub, marginTop: 4 }, children: l })
+        /* @__PURE__ */ jsx87("div", { style: { ...flex6, borderTop: `2px dashed ${L2.sub}`, margin: sq ? "0 30px" : "0 40px" } }),
+        /* @__PURE__ */ jsx87("div", { style: { ...flex6, justifyContent: "space-between", padding: sq ? "18px 30px" : "26px 40px" }, children: [[num(p.st.toThem), "SHOWS"], [num(p.st.fromThem), "ENCORES"], [num(p.st.reposts), "STAGE DIVES"]].map(([v, l], k) => /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", alignItems: k === 0 ? "flex-start" : k === 2 ? "flex-end" : "center" }, children: [
+          /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Heavy", fontSize: sq ? 44 : st ? 64 : 52, lineHeight: 1 }, children: v }),
+          /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Mono", fontSize: sq ? 16 : 18, letterSpacing: 2, color: L2.sub, marginTop: 4 }, children: l })
         ] }, k)) }),
-        /* @__PURE__ */ jsxs86("div", { style: { ...flex6, alignItems: "center", justifyContent: "space-between", background: L2.ink, color: L2.card, padding: sq ? "14px 30px" : "20px 40px" }, children: [
-          /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Mono", fontSize: sq ? 17 : 20, letterSpacing: 2 }, children: sq ? `ADMIT ONE \xB7 ${p.when.mon} ${p.when.year} TOUR` : `${p.when.mon} ${p.when.year} TOUR \xB7 GUEST OF @${owner.handle.toUpperCase()}`.slice(0, 52) }),
-          /* @__PURE__ */ jsx86("svg", { width: 110, height: 34, viewBox: "0 0 110 34", children: Array.from({ length: 26 }, (_, i) => /* @__PURE__ */ jsx86("rect", { x: i * 4.2, y: 0, width: i * 7 % 3 + 1.2, height: 34, fill: L2.card }, i)) })
+        /* @__PURE__ */ jsxs87("div", { style: { ...flex6, alignItems: "center", justifyContent: "space-between", background: L2.ink, color: L2.card, padding: sq ? "14px 30px" : "20px 40px" }, children: [
+          /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Mono", fontSize: sq ? 17 : 20, letterSpacing: 2 }, children: sq ? `ADMIT ONE \xB7 ${p.when.mon} ${p.when.year} TOUR` : `${p.when.mon} ${p.when.year} TOUR \xB7 GUEST OF @${owner.handle.toUpperCase()}`.slice(0, 52) }),
+          /* @__PURE__ */ jsx87("svg", { width: 110, height: 34, viewBox: "0 0 110 34", children: Array.from({ length: 26 }, (_, i) => /* @__PURE__ */ jsx87("rect", { x: i * 4.2, y: 0, width: i * 7 % 3 + 1.2, height: 34, fill: L2.card }, i)) })
         ] })
       ] }),
-      /* @__PURE__ */ jsxs86("div", { style: { ...flex6, alignSelf: "stretch", flexDirection: "column" }, children: [
-        st && /* @__PURE__ */ jsx86("span", { style: { fontSize: 34, color: L2.foot, textAlign: "center", alignSelf: "center", marginBottom: 60, lineHeight: 1.35, maxWidth: 820 }, children: "Front row for every post. On the guest list, forever." }),
-        /* @__PURE__ */ jsx86(Foot, { owner, mark: p.mark, color: L2.foot, label: `Guest list: @${owner.handle}` })
+      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, alignSelf: "stretch", flexDirection: "column" }, children: [
+        st && /* @__PURE__ */ jsx87("span", { style: { fontSize: 34, color: L2.foot, textAlign: "center", alignSelf: "center", marginBottom: 60, lineHeight: 1.35, maxWidth: 820 }, children: "Front row for every post. On the guest list, forever." }),
+        /* @__PURE__ */ jsx87(Foot, { owner, mark: p.mark, color: L2.foot, label: `Guest list: @${owner.handle}` })
       ] })
     ] })
   ] });
@@ -13524,43 +13950,43 @@ var JERSEY = [
   { bg: "#2E6B4F", ink: "#F7EBD0", sub: "rgba(247,235,208,0.7)", accent: "#F5C542", shirt: "#F5C542", trim: "#8B2E1A", num: "#8B2E1A", shadow: "#F7EBD0", card: "#275B43" }
 ];
 function JerseyCard(p, size, owner) {
-  let [w, h] = dims2(size), L2 = pick4(p.colour, JERSEY), sq = size === "square", st = size === "story", name = p.who.name, jw = sq ? 500 : st ? 880 : 620, jh = Math.round(jw * 1.03), k = jw / 600, sur = lastName(name).toUpperCase(), shirt = "M200 30 C240 72 360 72 400 30 L520 70 C560 85 580 110 590 150 L600 250 L490 275 L480 215 L480 598 C480 610 470 620 458 620 L142 620 C130 620 120 610 120 598 L120 215 L110 275 L0 250 L10 150 C20 110 40 85 80 70 Z", t = { bg: L2.bg, card: L2.card, ink: L2.ink, sub: L2.sub, accent: L2.accent, now: L2.ink }, stat2 = (v, l, key2) => /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", flex: 1, background: L2.card, borderRadius: 20, padding: "18px 22px" }, children: [
-    /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Heavy", fontSize: 48, lineHeight: 1, color: L2.ink }, children: v }),
-    /* @__PURE__ */ jsx86("span", { style: { fontSize: 22, color: L2.sub, marginTop: 6 }, children: l })
+  let [w, h] = dims2(size), L2 = pick4(p.colour, JERSEY), sq = size === "square", st = size === "story", name = p.who.name, jw = sq ? 500 : st ? 880 : 620, jh = Math.round(jw * 1.03), k = jw / 600, sur = lastName(name).toUpperCase(), shirt = "M200 30 C240 72 360 72 400 30 L520 70 C560 85 580 110 590 150 L600 250 L490 275 L480 215 L480 598 C480 610 470 620 458 620 L142 620 C130 620 120 610 120 598 L120 215 L110 275 L0 250 L10 150 C20 110 40 85 80 70 Z", t = { bg: L2.bg, card: L2.card, ink: L2.ink, sub: L2.sub, accent: L2.accent, now: L2.ink }, stat2 = (v, l, key2) => /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", flex: 1, background: L2.card, borderRadius: 20, padding: "18px 22px" }, children: [
+    /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Heavy", fontSize: 48, lineHeight: 1, color: L2.ink }, children: v }),
+    /* @__PURE__ */ jsx87("span", { style: { fontSize: 22, color: L2.sub, marginTop: 6 }, children: l })
   ] }, key2);
-  return /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", justifyContent: "space-between", width: w, height: h, background: t.bg, padding: 72, color: t.ink, fontFamily: "Sans" }, children: [
-    /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column" }, children: [
+  return /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", justifyContent: "space-between", width: w, height: h, background: t.bg, padding: 72, color: t.ink, fontFamily: "Sans" }, children: [
+    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column" }, children: [
       kicker("SIGNING OF THE MONTH", L2.accent),
-      /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Display", fontSize: sq ? 64 : 84, lineHeight: 1.02, marginTop: 14 }, children: "Welcome to the team" })
+      /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Display", fontSize: sq ? 64 : 84, lineHeight: 1.02, marginTop: 14 }, children: "Welcome to the team" })
     ] }),
-    /* @__PURE__ */ jsxs86("div", { style: { ...flex6, position: "relative", width: jw, height: jh, alignSelf: "center" }, children: [
-      /* @__PURE__ */ jsxs86("svg", { width: jw, height: jh, viewBox: "0 0 600 620", style: { position: "absolute", left: 0, top: 0 }, children: [
-        /* @__PURE__ */ jsx86("path", { d: shirt, fill: L2.shirt }),
-        /* @__PURE__ */ jsx86("path", { d: "M200 30 C240 72 360 72 400 30", stroke: L2.trim, strokeWidth: 16, fill: "none" }),
-        /* @__PURE__ */ jsx86("path", { d: "M600 250 L490 275 M0 250 L110 275", stroke: L2.trim, strokeWidth: 14, fill: "none" }),
-        /* @__PURE__ */ jsx86("rect", { x: 132, y: 230, width: 12, height: 380, fill: L2.trim }),
-        /* @__PURE__ */ jsx86("rect", { x: 456, y: 230, width: 12, height: 380, fill: L2.trim }),
-        /* @__PURE__ */ jsx86("path", { d: "M200 30 C240 72 360 72 400 30 L380 26 C340 54 260 54 220 26 Z", fill: "rgba(0,0,0,0.12)" })
+    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "relative", width: jw, height: jh, alignSelf: "center" }, children: [
+      /* @__PURE__ */ jsxs87("svg", { width: jw, height: jh, viewBox: "0 0 600 620", style: { position: "absolute", left: 0, top: 0 }, children: [
+        /* @__PURE__ */ jsx87("path", { d: shirt, fill: L2.shirt }),
+        /* @__PURE__ */ jsx87("path", { d: "M200 30 C240 72 360 72 400 30", stroke: L2.trim, strokeWidth: 16, fill: "none" }),
+        /* @__PURE__ */ jsx87("path", { d: "M600 250 L490 275 M0 250 L110 275", stroke: L2.trim, strokeWidth: 14, fill: "none" }),
+        /* @__PURE__ */ jsx87("rect", { x: 132, y: 230, width: 12, height: 380, fill: L2.trim }),
+        /* @__PURE__ */ jsx87("rect", { x: 456, y: 230, width: 12, height: 380, fill: L2.trim }),
+        /* @__PURE__ */ jsx87("path", { d: "M200 30 C240 72 360 72 400 30 L380 26 C340 54 260 54 220 26 Z", fill: "rgba(0,0,0,0.12)" })
       ] }),
-      /* @__PURE__ */ jsx86("div", { style: { ...flex6, position: "absolute", left: 0, top: 110 * k, width: jw, justifyContent: "center", fontFamily: "Heavy", fontSize: fit4(sur, 64 * k, 8), letterSpacing: 6 * k, color: L2.num }, children: sur }),
-      /* @__PURE__ */ jsx86("div", { style: { ...flex6, position: "absolute", left: 8 * k, top: 190 * k + 8 * k, width: jw, justifyContent: "center", fontFamily: "Heavy", fontSize: (big2(p) > 99 ? 220 : 300) * k, lineHeight: 1, color: L2.shadow }, children: String(big2(p)) }),
-      /* @__PURE__ */ jsx86("div", { style: { ...flex6, position: "absolute", left: 0, top: 190 * k, width: jw, justifyContent: "center", fontFamily: "Heavy", fontSize: (big2(p) > 99 ? 220 : 300) * k, lineHeight: 1, color: L2.num }, children: String(big2(p)) })
+      /* @__PURE__ */ jsx87("div", { style: { ...flex6, position: "absolute", left: 0, top: 110 * k, width: jw, justifyContent: "center", fontFamily: "Heavy", fontSize: fit4(sur, 64 * k, 8), letterSpacing: 6 * k, color: L2.num }, children: sur }),
+      /* @__PURE__ */ jsx87("div", { style: { ...flex6, position: "absolute", left: 8 * k, top: 190 * k + 8 * k, width: jw, justifyContent: "center", fontFamily: "Heavy", fontSize: (big2(p) > 99 ? 220 : 300) * k, lineHeight: 1, color: L2.shadow }, children: String(big2(p)) }),
+      /* @__PURE__ */ jsx87("div", { style: { ...flex6, position: "absolute", left: 0, top: 190 * k, width: jw, justifyContent: "center", fontFamily: "Heavy", fontSize: (big2(p) > 99 ? 220 : 300) * k, lineHeight: 1, color: L2.num }, children: String(big2(p)) })
     ] }),
-    /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", gap: 24 }, children: [
-      /* @__PURE__ */ jsxs86("div", { style: { ...flex6, alignItems: "center", gap: 22 }, children: [
+    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", gap: 24 }, children: [
+      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, alignItems: "center", gap: 22 }, children: [
         photo(p.who.avatar, 0, 0, sq ? 96 : 120, sq ? 96 : 120, 999, { position: "relative", border: `5px solid ${L2.accent}` }),
-        /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", flex: 1 }, children: [
-          /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Display", fontWeight: 700, fontSize: fit4(name, sq ? 40 : 46, 16) }, children: name }),
-          /* @__PURE__ */ jsx86("span", { style: { fontSize: sq ? 24 : 26, color: L2.sub, marginTop: 2 }, children: `@${p.who.handle} \xB7 No. ${num(big2(p))}, one for every reply and mention` })
+        /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", flex: 1 }, children: [
+          /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Display", fontWeight: 700, fontSize: fit4(name, sq ? 40 : 46, 16) }, children: name }),
+          /* @__PURE__ */ jsx87("span", { style: { fontSize: sq ? 24 : 26, color: L2.sub, marginTop: 2 }, children: `@${p.who.handle} \xB7 No. ${num(big2(p))}, one for every reply and mention` })
         ] })
       ] }),
-      !sq && /* @__PURE__ */ jsxs86("div", { style: { ...flex6, gap: 18 }, children: [
+      !sq && /* @__PURE__ */ jsxs87("div", { style: { ...flex6, gap: 18 }, children: [
         stat2(num(p.st.toThem), "my replies", 0),
         stat2(num(p.st.fromThem), "their mentions", 1),
         stat2(num(p.st.reposts), "assists (reposts)", 2)
       ] })
     ] }),
-    /* @__PURE__ */ jsx86(Foot, { owner, mark: p.mark, color: L2.sub, label: `Signed by @${owner.handle}` })
+    /* @__PURE__ */ jsx87(Foot, { owner, mark: p.mark, color: L2.sub, label: `Signed by @${owner.handle}` })
   ] });
 }
 var POST = [
@@ -13569,78 +13995,78 @@ var POST = [
   { table: "#0D0C15", card: "#F2EDE3", ink: "#16130F", sub: "#776E60", accent: "#3E63DD", air: !1, foot: "rgba(244,241,236,0.6)", front: "#3E63DD" }
 ];
 function PostcardCard(p, size, owner) {
-  let [w, h] = dims2(size), L2 = pick4(p.colour, POST), sq = size === "square", st = size === "story", name = p.who.name, cw = 936, backH = sq ? 760 : st ? 1060 : 1040, vertical = !sq, shell = (wd, ht, rot, inner) => /* @__PURE__ */ jsxs86("div", { style: { ...flex6, position: "relative", width: wd, height: ht, background: L2.card, transform: `rotate(${rot}deg)`, boxShadow: "0 22px 46px rgba(0,0,0,0.3)" }, children: [
-    L2.air && /* @__PURE__ */ jsxs86("svg", { width: wd, height: ht, viewBox: `0 0 ${wd} ${ht}`, style: { position: "absolute", left: 0, top: 0 }, children: [
-      Array.from({ length: Math.ceil((wd + ht) / 36) + 2 }, (_, i) => /* @__PURE__ */ jsx86("path", { d: `M${i * 36 - ht} ${ht} L${i * 36} 0 L${i * 36 + 18} 0 L${i * 36 - ht + 18} ${ht} Z`, fill: i % 2 ? "#D7263D" : "#1D4FA8" }, i)),
-      /* @__PURE__ */ jsx86("rect", { x: 16, y: 16, width: wd - 32, height: ht - 32, fill: L2.card })
+  let [w, h] = dims2(size), L2 = pick4(p.colour, POST), sq = size === "square", st = size === "story", name = p.who.name, cw = 936, backH = sq ? 760 : st ? 1060 : 1040, vertical = !sq, shell = (wd, ht, rot, inner) => /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "relative", width: wd, height: ht, background: L2.card, transform: `rotate(${rot}deg)`, boxShadow: "0 22px 46px rgba(0,0,0,0.3)" }, children: [
+    L2.air && /* @__PURE__ */ jsxs87("svg", { width: wd, height: ht, viewBox: `0 0 ${wd} ${ht}`, style: { position: "absolute", left: 0, top: 0 }, children: [
+      Array.from({ length: Math.ceil((wd + ht) / 36) + 2 }, (_, i) => /* @__PURE__ */ jsx87("path", { d: `M${i * 36 - ht} ${ht} L${i * 36} 0 L${i * 36 + 18} 0 L${i * 36 - ht + 18} ${ht} Z`, fill: i % 2 ? "#D7263D" : "#1D4FA8" }, i)),
+      /* @__PURE__ */ jsx87("rect", { x: 16, y: 16, width: wd - 32, height: ht - 32, fill: L2.card })
     ] }),
-    /* @__PURE__ */ jsx86("div", { style: { ...flex6, position: "absolute", left: 0, top: 0, width: wd, height: ht, padding: L2.air ? 48 : 40 }, children: inner })
+    /* @__PURE__ */ jsx87("div", { style: { ...flex6, position: "absolute", left: 0, top: 0, width: wd, height: ht, padding: L2.air ? 48 : 40 }, children: inner })
   ] }), sd = sq ? 150 : 180, stW = sd + 36, stH = sd + 62, gapP = 14, holes = [];
-  for (let x = 7; x <= stW - 7; x += (stW - 14) / Math.round((stW - 14) / gapP)) holes.push(/* @__PURE__ */ jsx86("circle", { cx: x, cy: 0, r: 5, fill: L2.card }, `t${x}`), /* @__PURE__ */ jsx86("circle", { cx: x, cy: stH, r: 5, fill: L2.card }, `b${x}`));
-  for (let y = 7; y <= stH - 7; y += (stH - 14) / Math.round((stH - 14) / gapP)) holes.push(/* @__PURE__ */ jsx86("circle", { cx: 0, cy: y, r: 5, fill: L2.card }, `l${y}`), /* @__PURE__ */ jsx86("circle", { cx: stW, cy: y, r: 5, fill: L2.card }, `r${y}`));
-  let stamp = /* @__PURE__ */ jsxs86("div", { style: { ...flex6, position: "relative", width: stW, height: stH }, children: [
-    /* @__PURE__ */ jsxs86("svg", { width: stW, height: stH, viewBox: `0 0 ${stW} ${stH}`, style: { position: "absolute", left: 0, top: 0 }, children: [
-      /* @__PURE__ */ jsx86("rect", { x: 0, y: 0, width: stW, height: stH, fill: L2.air ? "#EAF0FA" : "#FFFFFF" }),
+  for (let x = 7; x <= stW - 7; x += (stW - 14) / Math.round((stW - 14) / gapP)) holes.push(/* @__PURE__ */ jsx87("circle", { cx: x, cy: 0, r: 5, fill: L2.card }, `t${x}`), /* @__PURE__ */ jsx87("circle", { cx: x, cy: stH, r: 5, fill: L2.card }, `b${x}`));
+  for (let y = 7; y <= stH - 7; y += (stH - 14) / Math.round((stH - 14) / gapP)) holes.push(/* @__PURE__ */ jsx87("circle", { cx: 0, cy: y, r: 5, fill: L2.card }, `l${y}`), /* @__PURE__ */ jsx87("circle", { cx: stW, cy: y, r: 5, fill: L2.card }, `r${y}`));
+  let stamp = /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "relative", width: stW, height: stH }, children: [
+    /* @__PURE__ */ jsxs87("svg", { width: stW, height: stH, viewBox: `0 0 ${stW} ${stH}`, style: { position: "absolute", left: 0, top: 0 }, children: [
+      /* @__PURE__ */ jsx87("rect", { x: 0, y: 0, width: stW, height: stH, fill: L2.air ? "#EAF0FA" : "#FFFFFF" }),
       holes,
-      /* @__PURE__ */ jsx86("rect", { x: 14, y: 14, width: stW - 28, height: stH - 28, fill: "none", stroke: L2.accent, strokeWidth: 2 })
+      /* @__PURE__ */ jsx87("rect", { x: 14, y: 14, width: stW - 28, height: stH - 28, fill: "none", stroke: L2.accent, strokeWidth: 2 })
     ] }),
     photo(p.who.avatar, 18, 18, sd, sd, 0),
-    /* @__PURE__ */ jsxs86("div", { style: { ...flex6, position: "absolute", left: 18, top: sd + 22, width: sd, justifyContent: "space-between", fontFamily: "Mono", fontWeight: 700, fontSize: 16, color: L2.accent }, children: [
-      /* @__PURE__ */ jsx86("span", { children: num(big2(p)) }),
-      /* @__PURE__ */ jsx86("span", { children: "X POST" })
+    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "absolute", left: 18, top: sd + 22, width: sd, justifyContent: "space-between", fontFamily: "Mono", fontWeight: 700, fontSize: 16, color: L2.accent }, children: [
+      /* @__PURE__ */ jsx87("span", { children: num(big2(p)) }),
+      /* @__PURE__ */ jsx87("span", { children: "X POST" })
     ] })
-  ] }), postmark = /* @__PURE__ */ jsxs86("div", { style: { ...flex6, position: "relative", width: 200, height: 130 }, children: [
-    /* @__PURE__ */ jsxs86("svg", { width: 200, height: 130, viewBox: "0 0 200 130", style: { position: "absolute", left: 0, top: 0 }, children: [
-      /* @__PURE__ */ jsx86("circle", { cx: 130, cy: 65, r: 56, fill: "none", stroke: L2.sub, strokeWidth: 3 }),
-      /* @__PURE__ */ jsx86("circle", { cx: 130, cy: 65, r: 44, fill: "none", stroke: L2.sub, strokeWidth: 1.5 }),
-      [38, 56, 74, 92].map((y, i) => /* @__PURE__ */ jsx86("path", { d: `M0 ${y} q 10 -8 20 0 t 20 0 t 20 0 t 20 0`, stroke: L2.sub, strokeWidth: 2.5, fill: "none" }, i))
+  ] }), postmark = /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "relative", width: 200, height: 130 }, children: [
+    /* @__PURE__ */ jsxs87("svg", { width: 200, height: 130, viewBox: "0 0 200 130", style: { position: "absolute", left: 0, top: 0 }, children: [
+      /* @__PURE__ */ jsx87("circle", { cx: 130, cy: 65, r: 56, fill: "none", stroke: L2.sub, strokeWidth: 3 }),
+      /* @__PURE__ */ jsx87("circle", { cx: 130, cy: 65, r: 44, fill: "none", stroke: L2.sub, strokeWidth: 1.5 }),
+      [38, 56, 74, 92].map((y, i) => /* @__PURE__ */ jsx87("path", { d: `M0 ${y} q 10 -8 20 0 t 20 0 t 20 0 t 20 0`, stroke: L2.sub, strokeWidth: 2.5, fill: "none" }, i))
     ] }),
-    /* @__PURE__ */ jsxs86("div", { style: { ...flex6, position: "absolute", left: 86, top: 36, width: 88, height: 58, flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "Mono", fontWeight: 700, color: L2.sub }, children: [
-      /* @__PURE__ */ jsx86("span", { style: { fontSize: 17 }, children: `${p.when.d} ${p.when.mon}` }),
-      /* @__PURE__ */ jsx86("span", { style: { fontSize: 15 }, children: String(p.when.year) })
+    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "absolute", left: 86, top: 36, width: 88, height: 58, flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "Mono", fontWeight: 700, color: L2.sub }, children: [
+      /* @__PURE__ */ jsx87("span", { style: { fontSize: 17 }, children: `${p.when.d} ${p.when.mon}` }),
+      /* @__PURE__ */ jsx87("span", { style: { fontSize: 15 }, children: String(p.when.year) })
     ] })
-  ] }), msgSize = sq ? 34 : st ? 40 : 44, message = /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", fontFamily: "Display", fontWeight: 500, color: L2.ink, fontSize: msgSize, lineHeight: 1.3 }, children: [
-    /* @__PURE__ */ jsx86("span", { children: `Dear ${firstName2(name)},` }),
-    /* @__PURE__ */ jsx86("span", { style: { marginTop: 16 }, children: `Wish you were here. Actually, you kind of were: ${plural(big2(p), "reply or mention", "replies and mentions")} in 30 days, and every one made my day a little better.` }),
-    /* @__PURE__ */ jsx86("span", { style: { marginTop: 16 }, children: `See you in the replies, ${firstName2(owner.name)}` })
-  ] }), address = /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", color: L2.ink }, children: [
-    /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Mono", fontSize: 18, letterSpacing: 4, color: L2.sub, marginBottom: 6 }, children: "TO" }),
-    [name, `@${p.who.handle}`, "Somewhere in my replies", "The internet"].map((t, i) => /* @__PURE__ */ jsx86("span", { style: { fontFamily: i === 1 ? "Mono" : "Display", fontWeight: i === 0 ? 700 : 500, fontSize: sq ? 28 : 34, borderBottom: `2px solid ${sub(L2.ink, 0.3)}`, padding: sq ? "10px 0 8px" : "14px 0 10px" }, children: t }, i))
-  ] }), back = vertical ? /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", flex: 1, justifyContent: "space-between" }, children: [
-    /* @__PURE__ */ jsxs86("div", { style: { ...flex6, justifyContent: "space-between", alignItems: "flex-start" }, children: [
-      /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column" }, children: [
-        /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Heavy", fontSize: 44, letterSpacing: 8, color: L2.ink }, children: "POST CARD" }),
-        /* @__PURE__ */ jsx86("div", { style: { ...flex6, marginTop: 14 }, children: postmark })
+  ] }), msgSize = sq ? 34 : st ? 40 : 44, message = /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", fontFamily: "Display", fontWeight: 500, color: L2.ink, fontSize: msgSize, lineHeight: 1.3 }, children: [
+    /* @__PURE__ */ jsx87("span", { children: `Dear ${firstName2(name)},` }),
+    /* @__PURE__ */ jsx87("span", { style: { marginTop: 16 }, children: `Wish you were here. Actually, you kind of were: ${plural(big2(p), "reply or mention", "replies and mentions")} in 30 days, and every one made my day a little better.` }),
+    /* @__PURE__ */ jsx87("span", { style: { marginTop: 16 }, children: `See you in the replies, ${firstName2(owner.name)}` })
+  ] }), address = /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", color: L2.ink }, children: [
+    /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Mono", fontSize: 18, letterSpacing: 4, color: L2.sub, marginBottom: 6 }, children: "TO" }),
+    [name, `@${p.who.handle}`, "Somewhere in my replies", "The internet"].map((t, i) => /* @__PURE__ */ jsx87("span", { style: { fontFamily: i === 1 ? "Mono" : "Display", fontWeight: i === 0 ? 700 : 500, fontSize: sq ? 28 : 34, borderBottom: `2px solid ${sub(L2.ink, 0.3)}`, padding: sq ? "10px 0 8px" : "14px 0 10px" }, children: t }, i))
+  ] }), back = vertical ? /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", flex: 1, justifyContent: "space-between" }, children: [
+    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, justifyContent: "space-between", alignItems: "flex-start" }, children: [
+      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column" }, children: [
+        /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Heavy", fontSize: 44, letterSpacing: 8, color: L2.ink }, children: "POST CARD" }),
+        /* @__PURE__ */ jsx87("div", { style: { ...flex6, marginTop: 14 }, children: postmark })
       ] }),
       stamp
     ] }),
     message,
     address
-  ] }) : /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flex: 1, gap: 34 }, children: [
-    /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", flex: 1, justifyContent: "space-between" }, children: [
-      /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column" }, children: [
-        /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Heavy", fontSize: 36, letterSpacing: 8, color: L2.ink }, children: "POST CARD" }),
-        /* @__PURE__ */ jsx86("div", { style: { ...flex6, marginTop: 14 }, children: postmark })
+  ] }) : /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flex: 1, gap: 34 }, children: [
+    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", flex: 1, justifyContent: "space-between" }, children: [
+      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column" }, children: [
+        /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Heavy", fontSize: 36, letterSpacing: 8, color: L2.ink }, children: "POST CARD" }),
+        /* @__PURE__ */ jsx87("div", { style: { ...flex6, marginTop: 14 }, children: postmark })
       ] }),
       message
     ] }),
-    /* @__PURE__ */ jsx86("div", { style: { ...flex6, width: 2, background: sub(L2.ink, 0.25) } }),
-    /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", width: 340, justifyContent: "space-between" }, children: [
-      /* @__PURE__ */ jsx86("div", { style: { ...flex6, justifyContent: "flex-end" }, children: stamp }),
+    /* @__PURE__ */ jsx87("div", { style: { ...flex6, width: 2, background: sub(L2.ink, 0.25) } }),
+    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", width: 340, justifyContent: "space-between" }, children: [
+      /* @__PURE__ */ jsx87("div", { style: { ...flex6, justifyContent: "flex-end" }, children: stamp }),
       address
     ] })
-  ] }), front = /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flex: 1, gap: 36, alignItems: "center" }, children: [
+  ] }), front = /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flex: 1, gap: 36, alignItems: "center" }, children: [
     photo(p.who.avatar, 0, 0, L2.air ? 400 : 420, L2.air ? 400 : 420, 16, { position: "relative" }),
-    /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", flex: 1 }, children: [
-      /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Display", fontWeight: 500, fontSize: 34, color: L2.sub }, children: "Greetings from" }),
-      /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Heavy", fontSize: 76, lineHeight: 0.95, color: L2.front, marginTop: 8 }, children: "THE REPLIES" }),
-      /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Mono", fontSize: 24, color: L2.ink, marginTop: 20 }, children: `@${p.who.handle}` })
+    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", flex: 1 }, children: [
+      /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Display", fontWeight: 500, fontSize: 34, color: L2.sub }, children: "Greetings from" }),
+      /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Heavy", fontSize: 76, lineHeight: 0.95, color: L2.front, marginTop: 8 }, children: "THE REPLIES" }),
+      /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Mono", fontSize: 24, color: L2.ink, marginTop: 20 }, children: `@${p.who.handle}` })
     ] })
   ] });
-  return /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", justifyContent: "space-between", alignItems: "center", width: w, height: h, background: L2.table, padding: 72, fontFamily: "Sans" }, children: [
+  return /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", justifyContent: "space-between", alignItems: "center", width: w, height: h, background: L2.table, padding: 72, fontFamily: "Sans" }, children: [
     st && shell(cw, 500, 1.5, front),
     shell(cw, backH, st ? -1 : -1.2, back),
-    /* @__PURE__ */ jsx86("div", { style: { ...flex6, flexDirection: "column", alignSelf: "stretch" }, children: /* @__PURE__ */ jsx86(Foot, { owner, mark: p.mark, color: L2.foot }) })
+    /* @__PURE__ */ jsx87("div", { style: { ...flex6, flexDirection: "column", alignSelf: "stretch" }, children: /* @__PURE__ */ jsx87(Foot, { owner, mark: p.mark, color: L2.foot }) })
   ] });
 }
 var MOVIE = [
@@ -13657,59 +14083,59 @@ function Laurel2({ color, top, bottom, wd = 360 }) {
     });
     pts.forEach(({ a, x, y }, i) => {
       let tang = Math.atan2(ry * Math.cos(a), rx * Math.sin(a) * side) * 180 / Math.PI;
-      leaves.push(/* @__PURE__ */ jsx86("ellipse", { cx: x, cy: y, rx: 13, ry: 5, fill: color, transform: `rotate(${tang - side * 35} ${x} ${y})` }, `${side}o${i}`));
+      leaves.push(/* @__PURE__ */ jsx87("ellipse", { cx: x, cy: y, rx: 13, ry: 5, fill: color, transform: `rotate(${tang - side * 35} ${x} ${y})` }, `${side}o${i}`));
     }), stems.push(pts.map((q, i) => `${i ? "L" : "M"}${q.x.toFixed(1)} ${q.y.toFixed(1)}`).join(" "));
   }
-  return /* @__PURE__ */ jsxs86("div", { style: { ...flex6, position: "relative", width: wd, height: 124 }, children: [
-    /* @__PURE__ */ jsxs86("svg", { width: wd, height: 124, viewBox: `0 0 ${wd} 124`, style: { position: "absolute", left: 0, top: 0 }, children: [
-      stems.map((d, i) => /* @__PURE__ */ jsx86("path", { d, stroke: color, strokeWidth: 2, fill: "none" }, i)),
+  return /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "relative", width: wd, height: 124 }, children: [
+    /* @__PURE__ */ jsxs87("svg", { width: wd, height: 124, viewBox: `0 0 ${wd} 124`, style: { position: "absolute", left: 0, top: 0 }, children: [
+      stems.map((d, i) => /* @__PURE__ */ jsx87("path", { d, stroke: color, strokeWidth: 2, fill: "none" }, i)),
       leaves
     ] }),
-    /* @__PURE__ */ jsxs86("div", { style: { ...flex6, position: "absolute", left: 0, top: 0, width: wd, height: 124, flexDirection: "column", alignItems: "center", justifyContent: "center", color, fontFamily: "Mono", textAlign: "center" }, children: [
-      /* @__PURE__ */ jsx86("span", { style: { fontSize: 14, letterSpacing: 1 }, children: top }),
-      /* @__PURE__ */ jsx86("span", { style: { fontSize: 14, letterSpacing: 1, marginTop: 4 }, children: bottom })
+    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "absolute", left: 0, top: 0, width: wd, height: 124, flexDirection: "column", alignItems: "center", justifyContent: "center", color, fontFamily: "Mono", textAlign: "center" }, children: [
+      /* @__PURE__ */ jsx87("span", { style: { fontSize: 14, letterSpacing: 1 }, children: top }),
+      /* @__PURE__ */ jsx87("span", { style: { fontSize: 14, letterSpacing: 1, marginTop: 4 }, children: bottom })
     ] })
   ] });
 }
 function MovieCard(p, size, owner) {
-  let [w, h] = dims2(size), L2 = pick4(p.colour, MOVIE), sq = size === "square", st = size === "story", name = p.who.name, billing = `@${owner.handle.toUpperCase()} PRESENTS A TIMELINE PRODUCTION \xB7 ${name.toUpperCase()} IN "${num(big2(p))} REPLIES" \xB7 WITH ${num(p.st.reposts)} REPOSTS \xB7 MUSIC BY THE NOTIFICATION SOUND${p.st.peakHour ? ` \xB7 EDITED AT ${p.st.peakHour}` : ""} \xB7 BASED ON A TRUE STORY`, credits = (narrow) => /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", flex: 1, justifyContent: "space-between", alignItems: narrow ? "flex-start" : "center", textAlign: narrow ? "left" : "center" }, children: [
-    /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Mono", fontSize: 20, letterSpacing: 5, color: L2.sub }, children: `@${owner.handle.toUpperCase()} PRESENTS` }),
-    /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", alignItems: narrow ? "flex-start" : "center" }, children: [
-      /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Mono", fontSize: 22, letterSpacing: 6, color: L2.accent }, children: "STARRING" }),
-      /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Display", fontWeight: 700, fontSize: fit4(name, narrow ? 46 : 56, narrow ? 14 : 18), letterSpacing: 2, marginTop: 6 }, children: name.toUpperCase() })
+  let [w, h] = dims2(size), L2 = pick4(p.colour, MOVIE), sq = size === "square", st = size === "story", name = p.who.name, billing = `@${owner.handle.toUpperCase()} PRESENTS A TIMELINE PRODUCTION \xB7 ${name.toUpperCase()} IN "${num(big2(p))} REPLIES" \xB7 WITH ${num(p.st.reposts)} REPOSTS \xB7 MUSIC BY THE NOTIFICATION SOUND${p.st.peakHour ? ` \xB7 EDITED AT ${p.st.peakHour}` : ""} \xB7 BASED ON A TRUE STORY`, credits = (narrow) => /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", flex: 1, justifyContent: "space-between", alignItems: narrow ? "flex-start" : "center", textAlign: narrow ? "left" : "center" }, children: [
+    /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Mono", fontSize: 20, letterSpacing: 5, color: L2.sub }, children: `@${owner.handle.toUpperCase()} PRESENTS` }),
+    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", alignItems: narrow ? "flex-start" : "center" }, children: [
+      /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Mono", fontSize: 22, letterSpacing: 6, color: L2.accent }, children: "STARRING" }),
+      /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Display", fontWeight: 700, fontSize: fit4(name, narrow ? 46 : 56, narrow ? 14 : 18), letterSpacing: 2, marginTop: 6 }, children: name.toUpperCase() })
     ] }),
-    /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", alignItems: narrow ? "flex-start" : "center" }, children: [
-      /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Heavy", fontSize: narrow ? 120 : st ? 200 : 128, lineHeight: 0.86, letterSpacing: -2 }, children: num(big2(p)) }),
-      /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Heavy", fontSize: narrow ? 64 : st ? 108 : 76, lineHeight: 0.9, letterSpacing: 2, color: L2.accent }, children: "REPLIES" }),
-      /* @__PURE__ */ jsx86("span", { style: { fontSize: narrow ? 24 : 30, lineHeight: 1.3, marginTop: 16, maxWidth: 760 }, children: `30 days. ${plural(p.st.days, "day")} of threads. Never once left on read.` })
+    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", alignItems: narrow ? "flex-start" : "center" }, children: [
+      /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Heavy", fontSize: narrow ? 120 : st ? 200 : 128, lineHeight: 0.86, letterSpacing: -2 }, children: num(big2(p)) }),
+      /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Heavy", fontSize: narrow ? 64 : st ? 108 : 76, lineHeight: 0.9, letterSpacing: 2, color: L2.accent }, children: "REPLIES" }),
+      /* @__PURE__ */ jsx87("span", { style: { fontSize: narrow ? 24 : 30, lineHeight: 1.3, marginTop: 16, maxWidth: 760 }, children: `30 days. ${plural(p.st.days, "day")} of threads. Never once left on read.` })
     ] }),
-    /* @__PURE__ */ jsxs86("div", { style: { ...flex6, gap: 10 }, children: [
-      /* @__PURE__ */ jsx86(Laurel2, { color: L2.ink, top: "OFFICIAL SELECTION", bottom: `MY TIMELINE ${p.when.year}`, wd: narrow ? 300 : 360 }),
-      !narrow && /* @__PURE__ */ jsx86(Laurel2, { color: L2.ink, top: "WINNER", bottom: "BEST SUPPORTING" })
+    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, gap: 10 }, children: [
+      /* @__PURE__ */ jsx87(Laurel2, { color: L2.ink, top: "OFFICIAL SELECTION", bottom: `MY TIMELINE ${p.when.year}`, wd: narrow ? 300 : 360 }),
+      !narrow && /* @__PURE__ */ jsx87(Laurel2, { color: L2.ink, top: "WINNER", bottom: "BEST SUPPORTING" })
     ] }),
-    /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Sans", fontWeight: 500, fontSize: narrow ? 13 : 15, letterSpacing: 1, lineHeight: 1.45, color: L2.sub, maxWidth: narrow ? 440 : 900 }, children: billing }),
-    /* @__PURE__ */ jsx86("div", { style: { ...flex6, alignSelf: "stretch", flexDirection: "column" }, children: narrow ? /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", gap: 10, fontSize: 20, color: L2.sub }, children: [
-      /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Mono", letterSpacing: 4, color: L2.ink }, children: `NOW SHOWING \xB7 ${p.when.month}` }),
-      /* @__PURE__ */ jsxs86("div", { style: { ...flex6, justifyContent: "space-between", alignItems: "center", fontFamily: "Mono", fontSize: 18 }, children: [
-        /* @__PURE__ */ jsx86("span", { children: `@${owner.handle}` }),
-        p.mark && /* @__PURE__ */ jsx86("span", { children: "Made with Orbit Cards" })
+    /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Sans", fontWeight: 500, fontSize: narrow ? 13 : 15, letterSpacing: 1, lineHeight: 1.45, color: L2.sub, maxWidth: narrow ? 440 : 900 }, children: billing }),
+    /* @__PURE__ */ jsx87("div", { style: { ...flex6, alignSelf: "stretch", flexDirection: "column" }, children: narrow ? /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", gap: 10, fontSize: 20, color: L2.sub }, children: [
+      /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Mono", letterSpacing: 4, color: L2.ink }, children: `NOW SHOWING \xB7 ${p.when.month}` }),
+      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, justifyContent: "space-between", alignItems: "center", fontFamily: "Mono", fontSize: 18 }, children: [
+        /* @__PURE__ */ jsx87("span", { children: `@${owner.handle}` }),
+        p.mark && /* @__PURE__ */ jsx87("span", { children: "Made with Orbit Cards" })
       ] })
-    ] }) : /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", gap: 22 }, children: [
-      /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Mono", fontSize: 24, letterSpacing: 6, alignSelf: "center" }, children: `NOW SHOWING \xB7 ${p.when.month}` }),
-      /* @__PURE__ */ jsx86(Foot, { owner, mark: p.mark, color: L2.sub })
+    ] }) : /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", gap: 22 }, children: [
+      /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Mono", fontSize: 24, letterSpacing: 6, alignSelf: "center" }, children: `NOW SHOWING \xB7 ${p.when.month}` }),
+      /* @__PURE__ */ jsx87(Foot, { owner, mark: p.mark, color: L2.sub })
     ] }) })
   ] });
   if (sq)
-    return /* @__PURE__ */ jsxs86("div", { style: { ...flex6, position: "relative", width: w, height: h, background: L2.bg, color: L2.ink, fontFamily: "Sans" }, children: [
+    return /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "relative", width: w, height: h, background: L2.bg, color: L2.ink, fontFamily: "Sans" }, children: [
       photo(p.who.avatar, 0, 0, 520, h, 0),
-      /* @__PURE__ */ jsx86("div", { style: { ...flex6, position: "absolute", left: 0, top: 0, width: 520, height: h, background: `linear-gradient(90deg, ${L2.wash} 0%, ${L2.wash} 55%, ${L2.bg} 100%)` } }),
-      /* @__PURE__ */ jsx86("div", { style: { ...flex6, position: "absolute", left: 540, top: 0, width: w - 520 - 20, height: h, padding: "72px 72px 72px 20px" }, children: credits(!0) })
+      /* @__PURE__ */ jsx87("div", { style: { ...flex6, position: "absolute", left: 0, top: 0, width: 520, height: h, background: `linear-gradient(90deg, ${L2.wash} 0%, ${L2.wash} 55%, ${L2.bg} 100%)` } }),
+      /* @__PURE__ */ jsx87("div", { style: { ...flex6, position: "absolute", left: 540, top: 0, width: w - 520 - 20, height: h, padding: "72px 72px 72px 20px" }, children: credits(!0) })
     ] });
   let ph = st ? 1e3 : 600;
-  return /* @__PURE__ */ jsxs86("div", { style: { ...flex6, position: "relative", width: w, height: h, background: L2.bg, color: L2.ink, fontFamily: "Sans" }, children: [
+  return /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "relative", width: w, height: h, background: L2.bg, color: L2.ink, fontFamily: "Sans" }, children: [
     photo(p.who.avatar, 0, 0, w, ph, 0, { objectPosition: st ? "50% 50%" : "50% 38%" }),
-    /* @__PURE__ */ jsx86("div", { style: { ...flex6, position: "absolute", left: 0, top: 0, width: w, height: ph, background: `linear-gradient(180deg, ${L2.wash} 0%, ${L2.wash} ${st ? 60 : 76}%, ${L2.bg} 100%)` } }),
-    /* @__PURE__ */ jsx86("div", { style: { ...flex6, position: "absolute", left: 0, top: ph - 20, width: w, height: h - ph + 20, padding: "0 72px 72px" }, children: credits(!1) })
+    /* @__PURE__ */ jsx87("div", { style: { ...flex6, position: "absolute", left: 0, top: 0, width: w, height: ph, background: `linear-gradient(180deg, ${L2.wash} 0%, ${L2.wash} ${st ? 60 : 76}%, ${L2.bg} 100%)` } }),
+    /* @__PURE__ */ jsx87("div", { style: { ...flex6, position: "absolute", left: 0, top: ph - 20, width: w, height: h - ph + 20, padding: "0 72px 72px" }, children: credits(!1) })
   ] });
 }
 var ROSETTE = [
@@ -13722,41 +14148,41 @@ function Rosette({ R, L: L2, avatar: avatar2 }) {
     let a = i * Math.PI / n, r = i % 2 ? r1 : r0;
     return `${(cx + Math.cos(a) * r).toFixed(1)},${(cy + Math.sin(a) * r).toFixed(1)}`;
   }).join(" "), tail = (s) => [[cx + s * 0.04 * R, cy], [cx + s * 0.4 * R, cy], [cx + s * 0.7 * R, cy + 1.6 * R], [cx + s * 0.52 * R, cy + 1.44 * R], [cx + s * 0.34 * R, cy + 1.6 * R]].map((q) => q.map((v) => v.toFixed(1)).join(",")).join(" "), pd = R * 1.08, by2 = cy + R * 0.6;
-  return /* @__PURE__ */ jsxs86("div", { style: { ...flex6, position: "relative", width: wd, height: ht }, children: [
-    /* @__PURE__ */ jsxs86("svg", { width: wd, height: ht, viewBox: `0 0 ${wd} ${ht}`, style: { position: "absolute", left: 0, top: 0 }, children: [
-      /* @__PURE__ */ jsx86("polygon", { points: tail(-1), fill: L2.dark }),
-      /* @__PURE__ */ jsx86("polygon", { points: tail(1), fill: L2.dark }),
-      /* @__PURE__ */ jsx86("path", { d: `M${cx - 0.22 * R} ${cy} L${cx - 0.52 * R} ${cy + 1.5 * R} M${cx + 0.22 * R} ${cy} L${cx + 0.52 * R} ${cy + 1.5 * R}`, stroke: L2.c2, strokeWidth: R * 0.05 }),
-      /* @__PURE__ */ jsx86("polygon", { points: zig(32, R, R * 0.88), fill: L2.c1 }),
-      /* @__PURE__ */ jsx86("polygon", { points: zig(28, R * 0.84, R * 0.74), fill: L2.c2 }),
-      /* @__PURE__ */ jsx86("circle", { cx, cy, r: R * 0.66, fill: L2.disc }),
-      /* @__PURE__ */ jsx86("circle", { cx, cy, r: R * 0.62, fill: "none", stroke: L2.dark, strokeWidth: 3, strokeDasharray: "6 7" }),
-      /* @__PURE__ */ jsx86("path", { d: `M${cx - R * 0.9} ${by2} L${cx + R * 0.9} ${by2} L${cx + R * 0.82} ${by2 + R * 0.15} L${cx + R * 0.9} ${by2 + R * 0.3} L${cx - R * 0.9} ${by2 + R * 0.3} L${cx - R * 0.82} ${by2 + R * 0.15} Z`, fill: L2.band })
+  return /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "relative", width: wd, height: ht }, children: [
+    /* @__PURE__ */ jsxs87("svg", { width: wd, height: ht, viewBox: `0 0 ${wd} ${ht}`, style: { position: "absolute", left: 0, top: 0 }, children: [
+      /* @__PURE__ */ jsx87("polygon", { points: tail(-1), fill: L2.dark }),
+      /* @__PURE__ */ jsx87("polygon", { points: tail(1), fill: L2.dark }),
+      /* @__PURE__ */ jsx87("path", { d: `M${cx - 0.22 * R} ${cy} L${cx - 0.52 * R} ${cy + 1.5 * R} M${cx + 0.22 * R} ${cy} L${cx + 0.52 * R} ${cy + 1.5 * R}`, stroke: L2.c2, strokeWidth: R * 0.05 }),
+      /* @__PURE__ */ jsx87("polygon", { points: zig(32, R, R * 0.88), fill: L2.c1 }),
+      /* @__PURE__ */ jsx87("polygon", { points: zig(28, R * 0.84, R * 0.74), fill: L2.c2 }),
+      /* @__PURE__ */ jsx87("circle", { cx, cy, r: R * 0.66, fill: L2.disc }),
+      /* @__PURE__ */ jsx87("circle", { cx, cy, r: R * 0.62, fill: "none", stroke: L2.dark, strokeWidth: 3, strokeDasharray: "6 7" }),
+      /* @__PURE__ */ jsx87("path", { d: `M${cx - R * 0.9} ${by2} L${cx + R * 0.9} ${by2} L${cx + R * 0.82} ${by2 + R * 0.15} L${cx + R * 0.9} ${by2 + R * 0.3} L${cx - R * 0.9} ${by2 + R * 0.3} L${cx - R * 0.82} ${by2 + R * 0.15} Z`, fill: L2.band })
     ] }),
     photo(avatar2, cx - pd / 2, cy - pd / 2, pd, pd, 999),
-    /* @__PURE__ */ jsx86("div", { style: { ...flex6, position: "absolute", left: cx - R * 0.8, top: by2, width: R * 1.6, height: R * 0.3, alignItems: "center", justifyContent: "center", fontFamily: "Heavy", fontSize: R * 0.16, letterSpacing: R * 0.02, color: L2.bandInk }, children: "FIRST PLACE" })
+    /* @__PURE__ */ jsx87("div", { style: { ...flex6, position: "absolute", left: cx - R * 0.8, top: by2, width: R * 1.6, height: R * 0.3, alignItems: "center", justifyContent: "center", fontFamily: "Heavy", fontSize: R * 0.16, letterSpacing: R * 0.02, color: L2.bandInk }, children: "FIRST PLACE" })
   ] });
 }
 function RosetteCard2(p, size, owner) {
-  let [w, h] = dims2(size), L2 = pick4(p.colour, ROSETTE), sq = size === "square", st = size === "story", name = p.who.name, R = sq ? 205 : st ? 370 : 240, words2 = /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", alignItems: sq ? "flex-start" : "center", textAlign: sq ? "left" : "center", ...sq ? { flex: 1 } : {} }, children: [
-    /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Mono", fontSize: 20, letterSpacing: 4, color: L2.sub }, children: "AWARDED TO" }),
-    /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Display", fontWeight: 700, fontSize: fit4(name, sq ? 54 : 66, sq ? 11 : 16), lineHeight: 1.05, marginTop: 8 }, children: name }),
-    /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Mono", fontSize: sq ? 24 : 26, color: L2.accent, marginTop: 6 }, children: `@${p.who.handle}` }),
-    /* @__PURE__ */ jsx86("span", { style: { fontSize: sq ? 26 : 30, lineHeight: 1.38, color: L2.sub, marginTop: 18, maxWidth: 780 }, children: `for ${between(p.st)} in 30 days, and the best advice on my timeline.` })
+  let [w, h] = dims2(size), L2 = pick4(p.colour, ROSETTE), sq = size === "square", st = size === "story", name = p.who.name, R = sq ? 205 : st ? 370 : 240, words2 = /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", alignItems: sq ? "flex-start" : "center", textAlign: sq ? "left" : "center", ...sq ? { flex: 1 } : {} }, children: [
+    /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Mono", fontSize: 20, letterSpacing: 4, color: L2.sub }, children: "AWARDED TO" }),
+    /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Display", fontWeight: 700, fontSize: fit4(name, sq ? 54 : 66, sq ? 11 : 16), lineHeight: 1.05, marginTop: 8 }, children: name }),
+    /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Mono", fontSize: sq ? 24 : 26, color: L2.accent, marginTop: 6 }, children: `@${p.who.handle}` }),
+    /* @__PURE__ */ jsx87("span", { style: { fontSize: sq ? 26 : 30, lineHeight: 1.38, color: L2.sub, marginTop: 18, maxWidth: 780 }, children: `for ${between(p.st)} in 30 days, and the best advice on my timeline.` })
   ] });
-  return /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", justifyContent: "space-between", width: w, height: h, background: L2.bg, padding: 72, color: L2.ink, fontFamily: "Sans" }, children: [
-    /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", alignItems: sq ? "flex-start" : "center" }, children: [
+  return /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", justifyContent: "space-between", width: w, height: h, background: L2.bg, padding: 72, color: L2.ink, fontFamily: "Sans" }, children: [
+    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", alignItems: sq ? "flex-start" : "center" }, children: [
       kicker(`${p.when.month} ON X`, L2.accent),
-      /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Display", fontSize: sq ? 76 : 92, lineHeight: 1.02, marginTop: 14 }, children: "Best in show" })
+      /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Display", fontSize: sq ? 76 : 92, lineHeight: 1.02, marginTop: 14 }, children: "Best in show" })
     ] }),
-    sq ? /* @__PURE__ */ jsxs86("div", { style: { ...flex6, alignItems: "center", gap: 36 }, children: [
-      /* @__PURE__ */ jsx86(Rosette, { R, L: L2, avatar: p.who.avatar }),
+    sq ? /* @__PURE__ */ jsxs87("div", { style: { ...flex6, alignItems: "center", gap: 36 }, children: [
+      /* @__PURE__ */ jsx87(Rosette, { R, L: L2, avatar: p.who.avatar }),
       words2
-    ] }) : /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", alignItems: "center", gap: st ? 50 : 28 }, children: [
-      /* @__PURE__ */ jsx86(Rosette, { R, L: L2, avatar: p.who.avatar }),
+    ] }) : /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", alignItems: "center", gap: st ? 50 : 28 }, children: [
+      /* @__PURE__ */ jsx87(Rosette, { R, L: L2, avatar: p.who.avatar }),
       words2
     ] }),
-    /* @__PURE__ */ jsx86(Foot, { owner, mark: p.mark, color: L2.sub, label: `Judged by @${owner.handle}` })
+    /* @__PURE__ */ jsx87(Foot, { owner, mark: p.mark, color: L2.sub, label: `Judged by @${owner.handle}` })
   ] });
 }
 var BOARD2 = [
@@ -13765,62 +14191,62 @@ var BOARD2 = [
   { sky0: "#5DB8F5", sky1: "#DFF3FF", sun: "#FFE27A", hill: "#7CC36A", ground: "#4E9A45", road: "#55575C", line: "#FFFFFF", board: "#FF5A36", boardInk: "#FFFFFF", accent: "#FFE27A", frame: "#16130F", foot: "rgba(255,255,255,0.92)", stars: !1, lamps: !1 }
 ];
 function BillboardCard2(p, size, owner) {
-  let [w, h] = dims2(size), L2 = pick4(p.colour, BOARD2), sq = size === "square", st = size === "story", bt = sq ? 96 : st ? 220 : 150, bh = sq ? 440 : st ? 520 : 500, gy = sq ? 780 : st ? 1180 : 960, bw = 936, bx = 72, ph = Math.min(380, bh - 20 - 56), handle = p.who.handle, sign = st ? { x: 560, y: 1300, w: 448, h: 230 } : null, layer3 = /* @__PURE__ */ jsxs86("svg", { width: w, height: h, viewBox: `0 0 ${w} ${h}`, style: { position: "absolute", left: 0, top: 0 }, children: [
-    /* @__PURE__ */ jsxs86("defs", { children: [
-      /* @__PURE__ */ jsxs86("linearGradient", { id: "sky", x1: "0", y1: "0", x2: "0", y2: "1", children: [
-        /* @__PURE__ */ jsx86("stop", { offset: "0", stopColor: L2.sky0 }),
-        /* @__PURE__ */ jsx86("stop", { offset: "1", stopColor: L2.sky1 })
+  let [w, h] = dims2(size), L2 = pick4(p.colour, BOARD2), sq = size === "square", st = size === "story", bt = sq ? 96 : st ? 220 : 150, bh = sq ? 440 : st ? 520 : 500, gy = sq ? 780 : st ? 1180 : 960, bw = 936, bx = 72, ph = Math.min(380, bh - 20 - 56), handle = p.who.handle, sign = st ? { x: 560, y: 1300, w: 448, h: 230 } : null, layer3 = /* @__PURE__ */ jsxs87("svg", { width: w, height: h, viewBox: `0 0 ${w} ${h}`, style: { position: "absolute", left: 0, top: 0 }, children: [
+    /* @__PURE__ */ jsxs87("defs", { children: [
+      /* @__PURE__ */ jsxs87("linearGradient", { id: "sky", x1: "0", y1: "0", x2: "0", y2: "1", children: [
+        /* @__PURE__ */ jsx87("stop", { offset: "0", stopColor: L2.sky0 }),
+        /* @__PURE__ */ jsx87("stop", { offset: "1", stopColor: L2.sky1 })
       ] }),
-      /* @__PURE__ */ jsxs86("linearGradient", { id: "cone", x1: "0", y1: "0", x2: "0", y2: "1", children: [
-        /* @__PURE__ */ jsx86("stop", { offset: "0", stopColor: "#FFF4C2", stopOpacity: 0.55 }),
-        /* @__PURE__ */ jsx86("stop", { offset: "1", stopColor: "#FFF4C2", stopOpacity: 0 })
+      /* @__PURE__ */ jsxs87("linearGradient", { id: "cone", x1: "0", y1: "0", x2: "0", y2: "1", children: [
+        /* @__PURE__ */ jsx87("stop", { offset: "0", stopColor: "#FFF4C2", stopOpacity: 0.55 }),
+        /* @__PURE__ */ jsx87("stop", { offset: "1", stopColor: "#FFF4C2", stopOpacity: 0 })
       ] })
     ] }),
-    /* @__PURE__ */ jsx86("rect", { x: 0, y: 0, width: w, height: gy, fill: "url(#sky)" }),
-    L2.stars && Array.from({ length: 60 }, (_, i) => /* @__PURE__ */ jsx86("circle", { cx: i * 197 % w, cy: i * 89 % (gy - 80), r: i % 3 * 0.8 + 1, fill: "#FFFFFF", fillOpacity: 0.7 }, i)),
-    /* @__PURE__ */ jsx86("circle", { cx: w * 0.78, cy: gy - (sq ? 90 : 160), r: sq ? 70 : 90, fill: L2.sun }),
-    /* @__PURE__ */ jsx86("path", { d: `M0 ${gy - 60} C ${w * 0.2} ${gy - 140} ${w * 0.4} ${gy - 30} ${w * 0.6} ${gy - 70} S ${w * 0.9} ${gy - 120} ${w} ${gy - 70} L ${w} ${gy} L 0 ${gy} Z`, fill: L2.hill }),
-    /* @__PURE__ */ jsx86("rect", { x: 0, y: gy, width: w, height: h - gy, fill: L2.ground }),
-    /* @__PURE__ */ jsx86("path", { d: `M${w / 2 - 30} ${gy} L${w / 2 + 30} ${gy} L${w / 2 + 420} ${h} L${w / 2 - 420} ${h} Z`, fill: L2.road }),
+    /* @__PURE__ */ jsx87("rect", { x: 0, y: 0, width: w, height: gy, fill: "url(#sky)" }),
+    L2.stars && Array.from({ length: 60 }, (_, i) => /* @__PURE__ */ jsx87("circle", { cx: i * 197 % w, cy: i * 89 % (gy - 80), r: i % 3 * 0.8 + 1, fill: "#FFFFFF", fillOpacity: 0.7 }, i)),
+    /* @__PURE__ */ jsx87("circle", { cx: w * 0.78, cy: gy - (sq ? 90 : 160), r: sq ? 70 : 90, fill: L2.sun }),
+    /* @__PURE__ */ jsx87("path", { d: `M0 ${gy - 60} C ${w * 0.2} ${gy - 140} ${w * 0.4} ${gy - 30} ${w * 0.6} ${gy - 70} S ${w * 0.9} ${gy - 120} ${w} ${gy - 70} L ${w} ${gy} L 0 ${gy} Z`, fill: L2.hill }),
+    /* @__PURE__ */ jsx87("rect", { x: 0, y: gy, width: w, height: h - gy, fill: L2.ground }),
+    /* @__PURE__ */ jsx87("path", { d: `M${w / 2 - 30} ${gy} L${w / 2 + 30} ${gy} L${w / 2 + 420} ${h} L${w / 2 - 420} ${h} Z`, fill: L2.road }),
     Array.from({ length: 6 }, (_, i) => {
       let t0 = i / 6, t1 = t0 + 0.07, y0 = gy + (h - gy) * t0 * t0, y1 = gy + (h - gy) * t1 * t1;
-      return /* @__PURE__ */ jsx86("path", { d: `M${w / 2 - 2 - 8 * t0} ${y0} L${w / 2 + 2 + 8 * t0} ${y0} L${w / 2 + 2 + 8 * t1} ${y1} L${w / 2 - 2 - 8 * t1} ${y1} Z`, fill: L2.line }, i);
+      return /* @__PURE__ */ jsx87("path", { d: `M${w / 2 - 2 - 8 * t0} ${y0} L${w / 2 + 2 + 8 * t0} ${y0} L${w / 2 + 2 + 8 * t1} ${y1} L${w / 2 - 2 - 8 * t1} ${y1} Z`, fill: L2.line }, i);
     }),
-    /* @__PURE__ */ jsx86("rect", { x: bx + 150, y: bt + bh, width: 26, height: gy - bt - bh + 30, fill: L2.frame }),
-    /* @__PURE__ */ jsx86("rect", { x: bx + bw - 176, y: bt + bh, width: 26, height: gy - bt - bh + 30, fill: L2.frame }),
-    /* @__PURE__ */ jsx86("rect", { x: bx + 110, y: bt + bh + 30, width: bw - 220, height: 10, fill: L2.frame }),
-    [0.2, 0.5, 0.8].map((f, i) => /* @__PURE__ */ jsx86("path", { d: `M${bx + bw * f - 30} ${bt - 34} L${bx + bw * f} ${bt - 10} M${bx + bw * f - 50} ${bt - 44} h 40 v 14 h -40 Z`, stroke: L2.frame, strokeWidth: 6, fill: L2.frame }, i)),
-    sign && /* @__PURE__ */ jsxs86("g", { children: [
-      /* @__PURE__ */ jsx86("rect", { x: sign.x + 60, y: sign.y + sign.h, width: 16, height: h - sign.y - sign.h - 150, fill: "#8A8F98" }),
-      /* @__PURE__ */ jsx86("rect", { x: sign.x + sign.w - 76, y: sign.y + sign.h, width: 16, height: h - sign.y - sign.h - 150, fill: "#8A8F98" }),
-      /* @__PURE__ */ jsx86("rect", { x: sign.x, y: sign.y, width: sign.w, height: sign.h, rx: 18, fill: "#0F6B3A" }),
-      /* @__PURE__ */ jsx86("rect", { x: sign.x + 8, y: sign.y + 8, width: sign.w - 16, height: sign.h - 16, rx: 12, fill: "none", stroke: "#FFFFFF", strokeWidth: 4 }),
-      /* @__PURE__ */ jsx86("path", { d: `M${sign.x + sign.w - 90} ${sign.y + 150} l 40 -40 m -40 0 h 40 v 40`, stroke: "#FFFFFF", strokeWidth: 8, fill: "none", strokeLinecap: "round", strokeLinejoin: "round" })
+    /* @__PURE__ */ jsx87("rect", { x: bx + 150, y: bt + bh, width: 26, height: gy - bt - bh + 30, fill: L2.frame }),
+    /* @__PURE__ */ jsx87("rect", { x: bx + bw - 176, y: bt + bh, width: 26, height: gy - bt - bh + 30, fill: L2.frame }),
+    /* @__PURE__ */ jsx87("rect", { x: bx + 110, y: bt + bh + 30, width: bw - 220, height: 10, fill: L2.frame }),
+    [0.2, 0.5, 0.8].map((f, i) => /* @__PURE__ */ jsx87("path", { d: `M${bx + bw * f - 30} ${bt - 34} L${bx + bw * f} ${bt - 10} M${bx + bw * f - 50} ${bt - 44} h 40 v 14 h -40 Z`, stroke: L2.frame, strokeWidth: 6, fill: L2.frame }, i)),
+    sign && /* @__PURE__ */ jsxs87("g", { children: [
+      /* @__PURE__ */ jsx87("rect", { x: sign.x + 60, y: sign.y + sign.h, width: 16, height: h - sign.y - sign.h - 150, fill: "#8A8F98" }),
+      /* @__PURE__ */ jsx87("rect", { x: sign.x + sign.w - 76, y: sign.y + sign.h, width: 16, height: h - sign.y - sign.h - 150, fill: "#8A8F98" }),
+      /* @__PURE__ */ jsx87("rect", { x: sign.x, y: sign.y, width: sign.w, height: sign.h, rx: 18, fill: "#0F6B3A" }),
+      /* @__PURE__ */ jsx87("rect", { x: sign.x + 8, y: sign.y + 8, width: sign.w - 16, height: sign.h - 16, rx: 12, fill: "none", stroke: "#FFFFFF", strokeWidth: 4 }),
+      /* @__PURE__ */ jsx87("path", { d: `M${sign.x + sign.w - 90} ${sign.y + 150} l 40 -40 m -40 0 h 40 v 40`, stroke: "#FFFFFF", strokeWidth: 8, fill: "none", strokeLinecap: "round", strokeLinejoin: "round" })
     ] })
-  ] }), lampLayer = L2.lamps ? /* @__PURE__ */ jsxs86("svg", { width: w, height: h, viewBox: `0 0 ${w} ${h}`, style: { position: "absolute", left: 0, top: 0 }, children: [
-    /* @__PURE__ */ jsx86("defs", { children: /* @__PURE__ */ jsxs86("linearGradient", { id: "cone2", x1: "0", y1: "0", x2: "0", y2: "1", children: [
-      /* @__PURE__ */ jsx86("stop", { offset: "0", stopColor: "#FFF4C2", stopOpacity: 0.28 }),
-      /* @__PURE__ */ jsx86("stop", { offset: "1", stopColor: "#FFF4C2", stopOpacity: 0 })
+  ] }), lampLayer = L2.lamps ? /* @__PURE__ */ jsxs87("svg", { width: w, height: h, viewBox: `0 0 ${w} ${h}`, style: { position: "absolute", left: 0, top: 0 }, children: [
+    /* @__PURE__ */ jsx87("defs", { children: /* @__PURE__ */ jsxs87("linearGradient", { id: "cone2", x1: "0", y1: "0", x2: "0", y2: "1", children: [
+      /* @__PURE__ */ jsx87("stop", { offset: "0", stopColor: "#FFF4C2", stopOpacity: 0.28 }),
+      /* @__PURE__ */ jsx87("stop", { offset: "1", stopColor: "#FFF4C2", stopOpacity: 0 })
     ] }) }),
-    [0.2, 0.5, 0.8].map((f, i) => /* @__PURE__ */ jsx86("path", { d: `M${bx + bw * f - 30} ${bt - 24} L${bx + bw * f + 70} ${bt + bh * 0.42} L${bx + bw * f - 130} ${bt + bh * 0.42} Z`, fill: "url(#cone2)" }, i))
+    [0.2, 0.5, 0.8].map((f, i) => /* @__PURE__ */ jsx87("path", { d: `M${bx + bw * f - 30} ${bt - 24} L${bx + bw * f + 70} ${bt + bh * 0.42} L${bx + bw * f - 130} ${bt + bh * 0.42} Z`, fill: "url(#cone2)" }, i))
   ] }) : null;
-  return /* @__PURE__ */ jsxs86("div", { style: { ...flex6, position: "relative", width: w, height: h, fontFamily: "Sans" }, children: [
+  return /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "relative", width: w, height: h, fontFamily: "Sans" }, children: [
     layer3,
-    /* @__PURE__ */ jsxs86("div", { style: { ...flex6, position: "absolute", left: bx, top: bt, width: bw, height: bh, background: L2.board, border: `10px solid ${L2.frame}`, padding: 28, gap: 32, alignItems: "center", color: L2.boardInk, boxShadow: "0 16px 30px rgba(0,0,0,0.3)" }, children: [
+    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "absolute", left: bx, top: bt, width: bw, height: bh, background: L2.board, border: `10px solid ${L2.frame}`, padding: 28, gap: 32, alignItems: "center", color: L2.boardInk, boxShadow: "0 16px 30px rgba(0,0,0,0.3)" }, children: [
       photo(p.who.avatar, 0, 0, ph, ph, 0, { position: "relative" }),
-      /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", flex: 1 }, children: [
-        /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Heavy", fontSize: sq ? 74 : 76, lineHeight: 0.92, color: L2.accent }, children: "THANK YOU" }),
-        /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Heavy", fontSize: fit4(`@${handle}`, sq ? 58 : 62, 12), lineHeight: 1, marginTop: 10 }, children: `@${handle}` }),
-        /* @__PURE__ */ jsx86("span", { style: { fontSize: sq ? 28 : 30, lineHeight: 1.3, marginTop: 20 }, children: `${plural(big2(p), "reply or mention", "replies and mentions")} in 30 days. Not one of them boring.` })
+      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", flex: 1 }, children: [
+        /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Heavy", fontSize: sq ? 74 : 76, lineHeight: 0.92, color: L2.accent }, children: "THANK YOU" }),
+        /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Heavy", fontSize: fit4(`@${handle}`, sq ? 58 : 62, 12), lineHeight: 1, marginTop: 10 }, children: `@${handle}` }),
+        /* @__PURE__ */ jsx87("span", { style: { fontSize: sq ? 28 : 30, lineHeight: 1.3, marginTop: 20 }, children: `${plural(big2(p), "reply or mention", "replies and mentions")} in 30 days. Not one of them boring.` })
       ] })
     ] }),
     lampLayer,
-    sign && /* @__PURE__ */ jsxs86("div", { style: { ...flex6, position: "absolute", left: sign.x + 34, top: sign.y + 28, width: sign.w - 140, flexDirection: "column", color: "#FFFFFF" }, children: [
-      /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Display", fontWeight: 700, fontSize: 30 }, children: `EXIT ${num(big2(p))}` }),
-      /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Display", fontWeight: 700, fontSize: fit4(`@${handle}`, 40, 12), marginTop: 6 }, children: `@${handle}` }),
-      /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Display", fontWeight: 500, fontSize: 26, marginTop: 6 }, children: "Follow \xB7 0.5 mi" })
+    sign && /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "absolute", left: sign.x + 34, top: sign.y + 28, width: sign.w - 140, flexDirection: "column", color: "#FFFFFF" }, children: [
+      /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Display", fontWeight: 700, fontSize: 30 }, children: `EXIT ${num(big2(p))}` }),
+      /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Display", fontWeight: 700, fontSize: fit4(`@${handle}`, 40, 12), marginTop: 6 }, children: `@${handle}` }),
+      /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Display", fontWeight: 500, fontSize: 26, marginTop: 6 }, children: "Follow \xB7 0.5 mi" })
     ] }),
-    /* @__PURE__ */ jsx86("div", { style: { ...flex6, position: "absolute", left: 72, bottom: 72, width: w - 144, flexDirection: "column" }, children: /* @__PURE__ */ jsx86(Foot, { owner, mark: p.mark, color: L2.foot, label: `Paid for by @${owner.handle}` }) })
+    /* @__PURE__ */ jsx87("div", { style: { ...flex6, position: "absolute", left: 72, bottom: 72, width: w - 144, flexDirection: "column" }, children: /* @__PURE__ */ jsx87(Foot, { owner, mark: p.mark, color: L2.foot, label: `Paid for by @${owner.handle}` }) })
   ] });
 }
 var FORTUNE = [
@@ -13830,33 +14256,33 @@ var FORTUNE = [
 ];
 function FortuneCard(p, size, owner) {
   let [w, h] = dims2(size), L2 = pick4(p.colour, FORTUNE), sq = size === "square", st = size === "story", cw = sq ? 400 : st ? 860 : 560, ch = Math.round(cw * 0.6), slipTop = Math.round(ch * 0.8), slipH = sq ? 180 : st ? 270 : 220, blockH = slipTop + slipH + 30, d = sq ? 120 : st ? 170 : 140, nums = [[num(p.st.toThem), "my replies"], [num(p.st.fromThem), "their mentions"], [num(p.st.reposts), "reposts"], [num(p.st.days), "days talking"], [num(p.st.streak), "days in a row"]];
-  return /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", justifyContent: "space-between", width: w, height: h, background: L2.bg, padding: 72, color: L2.ink, fontFamily: "Sans" }, children: [
-    /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column" }, children: [
+  return /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", justifyContent: "space-between", width: w, height: h, background: L2.bg, padding: 72, color: L2.ink, fontFamily: "Sans" }, children: [
+    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column" }, children: [
       kicker("MY FORTUNE THIS MONTH", L2.accent),
-      /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Display", fontSize: sq ? 72 : 88, lineHeight: 1.02, marginTop: 14 }, children: "It was written" })
+      /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Display", fontSize: sq ? 72 : 88, lineHeight: 1.02, marginTop: 14 }, children: "It was written" })
     ] }),
-    /* @__PURE__ */ jsxs86("div", { style: { ...flex6, position: "relative", width: 936, height: blockH }, children: [
-      /* @__PURE__ */ jsxs86("svg", { width: cw, height: ch, viewBox: "0 0 500 300", style: { position: "absolute", left: (936 - cw) / 2, top: 0 }, children: [
-        /* @__PURE__ */ jsx86("ellipse", { cx: 250, cy: 272, rx: 200, ry: 18, fill: "rgba(0,0,0,0.2)" }),
-        /* @__PURE__ */ jsx86("path", { d: "M40 210 C10 120 110 30 250 40 C390 30 490 120 460 210 C400 180 320 190 250 262 C180 190 100 180 40 210 Z", fill: L2.cookie }),
-        /* @__PURE__ */ jsx86("path", { d: "M250 40 C140 40 60 100 66 180 C120 168 190 178 236 230 C214 160 220 90 250 40 Z", fill: L2.light, fillOpacity: 0.75 }),
-        /* @__PURE__ */ jsx86("path", { d: "M250 40 C222 110 222 190 250 262", stroke: L2.dark, strokeWidth: 9, fill: "none", strokeLinecap: "round" }),
-        /* @__PURE__ */ jsx86("path", { d: "M40 210 C100 180 180 190 250 262 C320 190 400 180 460 210", stroke: L2.dark, strokeWidth: 6, fill: "none", strokeLinecap: "round", strokeOpacity: 0.55 })
+    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "relative", width: 936, height: blockH }, children: [
+      /* @__PURE__ */ jsxs87("svg", { width: cw, height: ch, viewBox: "0 0 500 300", style: { position: "absolute", left: (936 - cw) / 2, top: 0 }, children: [
+        /* @__PURE__ */ jsx87("ellipse", { cx: 250, cy: 272, rx: 200, ry: 18, fill: "rgba(0,0,0,0.2)" }),
+        /* @__PURE__ */ jsx87("path", { d: "M40 210 C10 120 110 30 250 40 C390 30 490 120 460 210 C400 180 320 190 250 262 C180 190 100 180 40 210 Z", fill: L2.cookie }),
+        /* @__PURE__ */ jsx87("path", { d: "M250 40 C140 40 60 100 66 180 C120 168 190 178 236 230 C214 160 220 90 250 40 Z", fill: L2.light, fillOpacity: 0.75 }),
+        /* @__PURE__ */ jsx87("path", { d: "M250 40 C222 110 222 190 250 262", stroke: L2.dark, strokeWidth: 9, fill: "none", strokeLinecap: "round" }),
+        /* @__PURE__ */ jsx87("path", { d: "M40 210 C100 180 180 190 250 262 C320 190 400 180 460 210", stroke: L2.dark, strokeWidth: 6, fill: "none", strokeLinecap: "round", strokeOpacity: 0.55 })
       ] }),
-      /* @__PURE__ */ jsxs86("div", { style: { ...flex6, position: "absolute", left: 18, top: slipTop, width: 900, height: slipH, background: L2.slip, alignItems: "center", gap: 28, padding: "0 40px", transform: "rotate(-2deg)", boxShadow: "0 14px 28px rgba(0,0,0,0.22)" }, children: [
+      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "absolute", left: 18, top: slipTop, width: 900, height: slipH, background: L2.slip, alignItems: "center", gap: 28, padding: "0 40px", transform: "rotate(-2deg)", boxShadow: "0 14px 28px rgba(0,0,0,0.22)" }, children: [
         photo(p.who.avatar, 0, 0, d, d, 999, { position: "relative", border: `4px solid ${L2.slipInk}` }),
-        /* @__PURE__ */ jsx86("div", { style: { ...flex6, flexDirection: "column", flex: 1, color: L2.slipInk }, children: /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Display", fontWeight: 500, fontSize: sq ? 32 : st ? 44 : 38, lineHeight: 1.22 }, children: `Someone kind will talk with you ${plural(big2(p), "time")}. Look closer: it's @${p.who.handle}.` }) })
+        /* @__PURE__ */ jsx87("div", { style: { ...flex6, flexDirection: "column", flex: 1, color: L2.slipInk }, children: /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Display", fontWeight: 500, fontSize: sq ? 32 : st ? 44 : 38, lineHeight: 1.22 }, children: `Someone kind will talk with you ${plural(big2(p), "time")}. Look closer: it's @${p.who.handle}.` }) })
       ] })
     ] }),
-    /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", gap: 16 }, children: [
-      /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Mono", fontSize: 20, letterSpacing: 4, color: L2.sub }, children: "LUCKY NUMBERS" }),
-      /* @__PURE__ */ jsx86("div", { style: { ...flex6, gap: 14 }, children: nums.map(([v, l], k) => /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", alignItems: "center", flex: 1, background: L2.chip, borderRadius: 20, padding: sq ? "14px 6px" : st ? "30px 6px" : "20px 6px" }, children: [
-        /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Heavy", fontSize: sq ? 46 : st ? 66 : 56, lineHeight: 1, color: L2.chipInk }, children: v }),
-        /* @__PURE__ */ jsx86("span", { style: { fontSize: 18, color: L2.chipInk, opacity: 0.75, marginTop: 6, textAlign: "center" }, children: l })
+    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", gap: 16 }, children: [
+      /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Mono", fontSize: 20, letterSpacing: 4, color: L2.sub }, children: "LUCKY NUMBERS" }),
+      /* @__PURE__ */ jsx87("div", { style: { ...flex6, gap: 14 }, children: nums.map(([v, l], k) => /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", alignItems: "center", flex: 1, background: L2.chip, borderRadius: 20, padding: sq ? "14px 6px" : st ? "30px 6px" : "20px 6px" }, children: [
+        /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Heavy", fontSize: sq ? 46 : st ? 66 : 56, lineHeight: 1, color: L2.chipInk }, children: v }),
+        /* @__PURE__ */ jsx87("span", { style: { fontSize: 18, color: L2.chipInk, opacity: 0.75, marginTop: 6, textAlign: "center" }, children: l })
       ] }, k)) }),
-      !sq && /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Mono", fontSize: 20, letterSpacing: 2, color: L2.sub, marginTop: 6 }, children: [p.st.peakHour && `LUCKY HOUR ${p.st.peakHour}`, p.st.peakDay && `LUCKY DAY ${p.st.peakDay.toUpperCase()}`].filter(Boolean).join(" \xB7 ") })
+      !sq && /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Mono", fontSize: 20, letterSpacing: 2, color: L2.sub, marginTop: 6 }, children: [p.st.peakHour && `LUCKY HOUR ${p.st.peakHour}`, p.st.peakDay && `LUCKY DAY ${p.st.peakDay.toUpperCase()}`].filter(Boolean).join(" \xB7 ") })
     ] }),
-    /* @__PURE__ */ jsx86(Foot, { owner, mark: p.mark, color: L2.sub, label: `Cracked open by @${owner.handle}` })
+    /* @__PURE__ */ jsx87(Foot, { owner, mark: p.mark, color: L2.sub, label: `Cracked open by @${owner.handle}` })
   ] });
 }
 var ENVELOPE = [
@@ -13866,37 +14292,37 @@ var ENVELOPE = [
 ];
 function EnvelopeCard(p, size, owner) {
   let [w, h] = dims2(size), L2 = pick4(p.colour, ENVELOPE), sq = size === "square", st = size === "story", name = p.who.name, ew = sq ? 780 : 936, d = sq ? 170 : st ? 440 : 260, up = d + (sq ? 150 : st ? 210 : 180), eh = sq ? 280 : st ? 520 : 360, vy = up + eh * 0.5, labelH = sq ? 56 : st ? 82 : 68, cardW = ew - (sq ? 120 : 140), seal = sq ? 96 : 130;
-  return /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", justifyContent: "space-between", width: w, height: h, background: L2.bg, padding: 72, color: L2.ink, fontFamily: "Sans" }, children: [
-    /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", alignItems: "center", textAlign: "center" }, children: [
+  return /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", justifyContent: "space-between", width: w, height: h, background: L2.bg, padding: 72, color: L2.ink, fontFamily: "Sans" }, children: [
+    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", alignItems: "center", textAlign: "center" }, children: [
       kicker(`THE ORBIT AWARDS \xB7 ${p.when.year}`, L2.accent),
-      /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Display", fontSize: sq ? 66 : 76, lineHeight: 1.02, marginTop: 14 }, children: "And the award goes to\u2026" })
+      /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Display", fontSize: sq ? 66 : 76, lineHeight: 1.02, marginTop: 14 }, children: "And the award goes to\u2026" })
     ] }),
-    /* @__PURE__ */ jsxs86("div", { style: { ...flex6, position: "relative", width: ew, height: up + eh, alignSelf: "center" }, children: [
-      /* @__PURE__ */ jsxs86("svg", { width: ew, height: up + eh, viewBox: `0 0 ${ew} ${up + eh}`, style: { position: "absolute", left: 0, top: 0 }, children: [
-        /* @__PURE__ */ jsx86("rect", { x: 0, y: up, width: ew, height: eh, rx: 10, fill: L2.envDark }),
-        /* @__PURE__ */ jsx86("polygon", { points: `0,${up + 4} ${ew},${up + 4} ${ew / 2},${up - eh * 0.42}`, fill: L2.envDark }),
-        /* @__PURE__ */ jsx86("polygon", { points: `6,${up + 4} ${ew - 6},${up + 4} ${ew / 2},${up - eh * 0.42 + 8}`, fill: "none", stroke: L2.line, strokeWidth: 2 })
+    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "relative", width: ew, height: up + eh, alignSelf: "center" }, children: [
+      /* @__PURE__ */ jsxs87("svg", { width: ew, height: up + eh, viewBox: `0 0 ${ew} ${up + eh}`, style: { position: "absolute", left: 0, top: 0 }, children: [
+        /* @__PURE__ */ jsx87("rect", { x: 0, y: up, width: ew, height: eh, rx: 10, fill: L2.envDark }),
+        /* @__PURE__ */ jsx87("polygon", { points: `0,${up + 4} ${ew},${up + 4} ${ew / 2},${up - eh * 0.42}`, fill: L2.envDark }),
+        /* @__PURE__ */ jsx87("polygon", { points: `6,${up + 4} ${ew - 6},${up + 4} ${ew / 2},${up - eh * 0.42 + 8}`, fill: "none", stroke: L2.line, strokeWidth: 2 })
       ] }),
-      /* @__PURE__ */ jsxs86("div", { style: { ...flex6, position: "absolute", left: (ew - cardW) / 2, top: 0, width: cardW, height: up + eh * 0.8, background: L2.card, borderRadius: 12, flexDirection: "column", alignItems: "center", paddingTop: sq ? 30 : 44, color: L2.cardInk, boxShadow: "0 -6px 20px rgba(0,0,0,0.18)" }, children: [
+      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "absolute", left: (ew - cardW) / 2, top: 0, width: cardW, height: up + eh * 0.8, background: L2.card, borderRadius: 12, flexDirection: "column", alignItems: "center", paddingTop: sq ? 30 : 44, color: L2.cardInk, boxShadow: "0 -6px 20px rgba(0,0,0,0.18)" }, children: [
         photo(p.who.avatar, 0, 0, d, d, 999, { position: "relative", border: `5px solid ${L2.accent}` }),
-        /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Display", fontWeight: 700, fontSize: fit4(name, sq ? 50 : st ? 72 : 60, 16), lineHeight: 1.05, marginTop: sq ? 14 : 22 }, children: name }),
-        /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Mono", fontSize: sq ? 22 : 26, color: L2.cardSub, marginTop: 6 }, children: `@${p.who.handle}` })
+        /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Display", fontWeight: 700, fontSize: fit4(name, sq ? 50 : st ? 72 : 60, 16), lineHeight: 1.05, marginTop: sq ? 14 : 22 }, children: name }),
+        /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Mono", fontSize: sq ? 22 : 26, color: L2.cardSub, marginTop: 6 }, children: `@${p.who.handle}` })
       ] }),
-      /* @__PURE__ */ jsxs86("svg", { width: ew, height: up + eh, viewBox: `0 0 ${ew} ${up + eh}`, style: { position: "absolute", left: 0, top: 0 }, children: [
-        /* @__PURE__ */ jsx86("path", { d: `M0 ${up + 10} Q0 ${up} 10 ${up} L${ew / 2} ${vy} L${ew - 10} ${up} Q${ew} ${up} ${ew} ${up + 10} L${ew} ${up + eh - 10} Q${ew} ${up + eh} ${ew - 10} ${up + eh} L10 ${up + eh} Q0 ${up + eh} 0 ${up + eh - 10} Z`, fill: L2.env }),
-        /* @__PURE__ */ jsx86("path", { d: `M10 ${up} L${ew / 2} ${vy} L${ew - 10} ${up}`, stroke: L2.line, strokeWidth: 3, fill: "none" }),
-        /* @__PURE__ */ jsx86("path", { d: `M0 ${up + eh} L${ew * 0.42} ${up + eh * 0.62} M${ew} ${up + eh} L${ew * 0.58} ${up + eh * 0.62}`, stroke: L2.line, strokeWidth: 2, fill: "none" }),
-        /* @__PURE__ */ jsx86("circle", { cx: ew / 2, cy: vy, r: seal / 2, fill: L2.seal }),
-        /* @__PURE__ */ jsx86("circle", { cx: ew / 2, cy: vy, r: seal / 2 - 9, fill: "none", stroke: L2.sealInk, strokeOpacity: 0.5, strokeWidth: 2 })
+      /* @__PURE__ */ jsxs87("svg", { width: ew, height: up + eh, viewBox: `0 0 ${ew} ${up + eh}`, style: { position: "absolute", left: 0, top: 0 }, children: [
+        /* @__PURE__ */ jsx87("path", { d: `M0 ${up + 10} Q0 ${up} 10 ${up} L${ew / 2} ${vy} L${ew - 10} ${up} Q${ew} ${up} ${ew} ${up + 10} L${ew} ${up + eh - 10} Q${ew} ${up + eh} ${ew - 10} ${up + eh} L10 ${up + eh} Q0 ${up + eh} 0 ${up + eh - 10} Z`, fill: L2.env }),
+        /* @__PURE__ */ jsx87("path", { d: `M10 ${up} L${ew / 2} ${vy} L${ew - 10} ${up}`, stroke: L2.line, strokeWidth: 3, fill: "none" }),
+        /* @__PURE__ */ jsx87("path", { d: `M0 ${up + eh} L${ew * 0.42} ${up + eh * 0.62} M${ew} ${up + eh} L${ew * 0.58} ${up + eh * 0.62}`, stroke: L2.line, strokeWidth: 2, fill: "none" }),
+        /* @__PURE__ */ jsx87("circle", { cx: ew / 2, cy: vy, r: seal / 2, fill: L2.seal }),
+        /* @__PURE__ */ jsx87("circle", { cx: ew / 2, cy: vy, r: seal / 2 - 9, fill: "none", stroke: L2.sealInk, strokeOpacity: 0.5, strokeWidth: 2 })
       ] }),
-      /* @__PURE__ */ jsx86("div", { style: { ...flex6, position: "absolute", left: ew / 2 - seal / 2, top: vy - seal / 2, width: seal, height: seal, alignItems: "center", justifyContent: "center", fontFamily: "Heavy", fontSize: seal * (big2(p) > 99 ? 0.3 : 0.4), color: L2.sealInk }, children: num(big2(p)) }),
-      /* @__PURE__ */ jsxs86("div", { style: { ...flex6, position: "absolute", left: 0, top: (vy + seal / 2 + up + eh) / 2 - labelH / 2, width: ew, flexDirection: "column", alignItems: "center", color: L2.label }, children: [
-        /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Mono", fontSize: sq ? 16 : 20, letterSpacing: 4, opacity: 0.7 }, children: "CATEGORY" }),
-        /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Heavy", fontSize: sq ? 30 : st ? 46 : 38, letterSpacing: 2, marginTop: 4 }, children: "BEST SUPPORTING REPLIER" })
+      /* @__PURE__ */ jsx87("div", { style: { ...flex6, position: "absolute", left: ew / 2 - seal / 2, top: vy - seal / 2, width: seal, height: seal, alignItems: "center", justifyContent: "center", fontFamily: "Heavy", fontSize: seal * (big2(p) > 99 ? 0.3 : 0.4), color: L2.sealInk }, children: num(big2(p)) }),
+      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "absolute", left: 0, top: (vy + seal / 2 + up + eh) / 2 - labelH / 2, width: ew, flexDirection: "column", alignItems: "center", color: L2.label }, children: [
+        /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Mono", fontSize: sq ? 16 : 20, letterSpacing: 4, opacity: 0.7 }, children: "CATEGORY" }),
+        /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Heavy", fontSize: sq ? 30 : st ? 46 : 38, letterSpacing: 2, marginTop: 4 }, children: "BEST SUPPORTING REPLIER" })
       ] })
     ] }),
-    !sq && /* @__PURE__ */ jsx86("span", { style: { fontSize: st ? 34 : 30, lineHeight: 1.38, color: L2.sub, textAlign: "center", alignSelf: "center", maxWidth: 820 }, children: `For ${between(p.st)} in 30 days, and always being in my corner. Speech optional.` }),
-    /* @__PURE__ */ jsx86(Foot, { owner, mark: p.mark, color: L2.sub, label: `Presented by @${owner.handle}` })
+    !sq && /* @__PURE__ */ jsx87("span", { style: { fontSize: st ? 34 : 30, lineHeight: 1.38, color: L2.sub, textAlign: "center", alignSelf: "center", maxWidth: 820 }, children: `For ${between(p.st)} in 30 days, and always being in my corner. Speech optional.` }),
+    /* @__PURE__ */ jsx87(Foot, { owner, mark: p.mark, color: L2.sub, label: `Presented by @${owner.handle}` })
   ] });
 }
 var ARCADE2 = [
@@ -13905,66 +14331,66 @@ var ARCADE2 = [
   { bg: "linear-gradient(180deg, #1B0B3A 0%, #4A1260 55%, #9E1F63 100%)", ink: "#FFFFFF", sub: "rgba(255,255,255,0.72)", a1: "#38E8FF", a2: "#FF4FB4", a3: "#FFD23F", scan: "rgba(0,0,0,0.18)", tint: "rgba(255,79,180,0.12)", grid: !0 }
 ];
 function heart(x, y, s, color, key2) {
-  return /* @__PURE__ */ jsx86("g", { children: [".XX.XX.", "XXXXXXX", "XXXXXXX", ".XXXXX.", "..XXX..", "...X..."].flatMap((r, j) => r.split("").map((c, i) => c === "X" ? /* @__PURE__ */ jsx86("rect", { x: x + i * s, y: y + j * s, width: s, height: s, fill: color }, `${i}-${j}`) : null)) }, key2);
+  return /* @__PURE__ */ jsx87("g", { children: [".XX.XX.", "XXXXXXX", "XXXXXXX", ".XXXXX.", "..XXX..", "...X..."].flatMap((r, j) => r.split("").map((c, i) => c === "X" ? /* @__PURE__ */ jsx87("rect", { x: x + i * s, y: y + j * s, width: s, height: s, fill: color }, `${i}-${j}`) : null)) }, key2);
 }
 function ArcadeCard3(p, size, owner) {
-  let [w, h] = dims2(size), L2 = pick4(p.colour, ARCADE2), sq = size === "square", st = size === "story", name = p.who.name, d = sq ? 330 : st ? 620 : 360, px2 = sq ? 11 : st ? 16 : 12, scan = /* @__PURE__ */ jsx86("svg", { width: w, height: h, viewBox: `0 0 ${w} ${h}`, style: { position: "absolute", left: 0, top: 0 }, children: Array.from({ length: Math.ceil(h / 6) }, (_, i) => /* @__PURE__ */ jsx86("rect", { x: 0, y: i * 6, width: w, height: 2, fill: L2.scan }, i)) }), grid = L2.grid ? /* @__PURE__ */ jsxs86("svg", { width: w, height: h, viewBox: `0 0 ${w} ${h}`, style: { position: "absolute", left: 0, top: 0 }, children: [
+  let [w, h] = dims2(size), L2 = pick4(p.colour, ARCADE2), sq = size === "square", st = size === "story", name = p.who.name, d = sq ? 330 : st ? 620 : 360, px2 = sq ? 11 : st ? 16 : 12, scan = /* @__PURE__ */ jsx87("svg", { width: w, height: h, viewBox: `0 0 ${w} ${h}`, style: { position: "absolute", left: 0, top: 0 }, children: Array.from({ length: Math.ceil(h / 6) }, (_, i) => /* @__PURE__ */ jsx87("rect", { x: 0, y: i * 6, width: w, height: 2, fill: L2.scan }, i)) }), grid = L2.grid ? /* @__PURE__ */ jsxs87("svg", { width: w, height: h, viewBox: `0 0 ${w} ${h}`, style: { position: "absolute", left: 0, top: 0 }, children: [
     Array.from({ length: 9 }, (_, i) => {
       let y = h * 0.72 + h * 0.28 * Math.pow(i / 8, 1.8);
-      return /* @__PURE__ */ jsx86("rect", { x: 0, y, width: w, height: 2, fill: "#FF4FB4", fillOpacity: 0.35 }, `h${i}`);
+      return /* @__PURE__ */ jsx87("rect", { x: 0, y, width: w, height: 2, fill: "#FF4FB4", fillOpacity: 0.35 }, `h${i}`);
     }),
     Array.from({ length: 15 }, (_, i) => {
       let x0 = w / 2 + (i - 7) * 50, x1 = w / 2 + (i - 7) * 260;
-      return /* @__PURE__ */ jsx86("path", { d: `M${x0} ${h * 0.72} L${x1} ${h}`, stroke: "#FF4FB4", strokeOpacity: 0.35, strokeWidth: 2 }, `v${i}`);
+      return /* @__PURE__ */ jsx87("path", { d: `M${x0} ${h * 0.72} L${x1} ${h}`, stroke: "#FF4FB4", strokeOpacity: 0.35, strokeWidth: 2 }, `v${i}`);
     })
-  ] }) : null, hud = (a, b, c, align) => /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", alignItems: align }, children: [
-    /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Mono", fontWeight: 700, fontSize: 22, color: c }, children: a }),
-    /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Mono", fontWeight: 700, fontSize: 24, color: L2.ink, marginTop: 4 }, children: b })
-  ] }), frame = /* @__PURE__ */ jsxs86("div", { style: { ...flex6, position: "relative", width: d + px2 * 4, height: d + px2 * 4 }, children: [
-    /* @__PURE__ */ jsx86("svg", { width: d + px2 * 4, height: d + px2 * 4, viewBox: `0 0 ${d + px2 * 4} ${d + px2 * 4}`, style: { position: "absolute", left: 0, top: 0 }, children: /* @__PURE__ */ jsx86("path", { d: `M${px2} 0 H${d + px2 * 3} V${px2} H${d + px2 * 4} V${d + px2 * 3} H${d + px2 * 3} V${d + px2 * 4} H${px2} V${d + px2 * 3} H0 V${px2} H${px2} Z`, fill: L2.a1 }) }),
+  ] }) : null, hud = (a, b, c, align) => /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", alignItems: align }, children: [
+    /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Mono", fontWeight: 700, fontSize: 22, color: c }, children: a }),
+    /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Mono", fontWeight: 700, fontSize: 24, color: L2.ink, marginTop: 4 }, children: b })
+  ] }), frame = /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "relative", width: d + px2 * 4, height: d + px2 * 4 }, children: [
+    /* @__PURE__ */ jsx87("svg", { width: d + px2 * 4, height: d + px2 * 4, viewBox: `0 0 ${d + px2 * 4} ${d + px2 * 4}`, style: { position: "absolute", left: 0, top: 0 }, children: /* @__PURE__ */ jsx87("path", { d: `M${px2} 0 H${d + px2 * 3} V${px2} H${d + px2 * 4} V${d + px2 * 3} H${d + px2 * 3} V${d + px2 * 4} H${px2} V${d + px2 * 3} H0 V${px2} H${px2} Z`, fill: L2.a1 }) }),
     photo(p.who.avatar, px2 * 2, px2 * 2, d, d, 0),
-    /* @__PURE__ */ jsx86("div", { style: { ...flex6, position: "absolute", left: px2 * 2, top: px2 * 2, width: d, height: d, background: L2.tint } }),
-    /* @__PURE__ */ jsxs86("svg", { width: d, height: d, viewBox: `0 0 ${d} ${d}`, style: { position: "absolute", left: px2 * 2, top: px2 * 2 }, children: [
-      Array.from({ length: Math.floor(d / px2) }, (_, i) => /* @__PURE__ */ jsx86("rect", { x: i * px2, y: 0, width: 1.5, height: d, fill: "rgba(0,0,0,0.22)" }, `x${i}`)),
-      Array.from({ length: Math.floor(d / px2) }, (_, i) => /* @__PURE__ */ jsx86("rect", { x: 0, y: i * px2, width: d, height: 1.5, fill: "rgba(0,0,0,0.22)" }, `y${i}`))
+    /* @__PURE__ */ jsx87("div", { style: { ...flex6, position: "absolute", left: px2 * 2, top: px2 * 2, width: d, height: d, background: L2.tint } }),
+    /* @__PURE__ */ jsxs87("svg", { width: d, height: d, viewBox: `0 0 ${d} ${d}`, style: { position: "absolute", left: px2 * 2, top: px2 * 2 }, children: [
+      Array.from({ length: Math.floor(d / px2) }, (_, i) => /* @__PURE__ */ jsx87("rect", { x: i * px2, y: 0, width: 1.5, height: d, fill: "rgba(0,0,0,0.22)" }, `x${i}`)),
+      Array.from({ length: Math.floor(d / px2) }, (_, i) => /* @__PURE__ */ jsx87("rect", { x: 0, y: i * px2, width: d, height: 1.5, fill: "rgba(0,0,0,0.22)" }, `y${i}`))
     ] })
-  ] }), stats = /* @__PURE__ */ jsx86("div", { style: { ...flex6, flexDirection: "column", gap: sq ? 14 : st ? 18 : 10, ...sq ? {} : { width: 640 } }, children: [["REPLIES", num(p.st.toThem)], ["MENTIONS", num(p.st.fromThem)], ["COMBO", `x${p.st.reposts}`], ["STREAK", `${p.st.streak}D`]].map(([k, v], i) => /* @__PURE__ */ jsxs86("div", { style: { ...flex6, alignItems: "center", fontFamily: "Mono", fontWeight: 700, fontSize: sq ? 30 : st ? 36 : 30, color: L2.ink }, children: [
-    /* @__PURE__ */ jsx86("span", { children: k }),
-    /* @__PURE__ */ jsx86("div", { style: { ...flex6, flex: 1, borderBottom: `4px dashed ${L2.sub}`, margin: "0 14px", height: 2, alignSelf: "center" } }),
-    /* @__PURE__ */ jsx86("span", { style: { color: [L2.a1, L2.a2, L2.a3, L2.a1][i] }, children: v })
-  ] }, i)) }), shadow = (t, fs, c) => /* @__PURE__ */ jsxs86("div", { style: { ...flex6, position: "relative" }, children: [
-    /* @__PURE__ */ jsx86("span", { style: { position: "absolute", left: fs * 0.06, top: fs * 0.06, fontFamily: "Mono", fontWeight: 700, fontSize: fs, lineHeight: 1, color: L2.a2 }, children: t }),
-    /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Mono", fontWeight: 700, fontSize: fs, lineHeight: 1, color: c }, children: t })
+  ] }), stats = /* @__PURE__ */ jsx87("div", { style: { ...flex6, flexDirection: "column", gap: sq ? 14 : st ? 18 : 10, ...sq ? {} : { width: 640 } }, children: [["REPLIES", num(p.st.toThem)], ["MENTIONS", num(p.st.fromThem)], ["COMBO", `x${p.st.reposts}`], ["STREAK", `${p.st.streak}D`]].map(([k, v], i) => /* @__PURE__ */ jsxs87("div", { style: { ...flex6, alignItems: "center", fontFamily: "Mono", fontWeight: 700, fontSize: sq ? 30 : st ? 36 : 30, color: L2.ink }, children: [
+    /* @__PURE__ */ jsx87("span", { children: k }),
+    /* @__PURE__ */ jsx87("div", { style: { ...flex6, flex: 1, borderBottom: `4px dashed ${L2.sub}`, margin: "0 14px", height: 2, alignSelf: "center" } }),
+    /* @__PURE__ */ jsx87("span", { style: { color: [L2.a1, L2.a2, L2.a3, L2.a1][i] }, children: v })
+  ] }, i)) }), shadow = (t, fs, c) => /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "relative" }, children: [
+    /* @__PURE__ */ jsx87("span", { style: { position: "absolute", left: fs * 0.06, top: fs * 0.06, fontFamily: "Mono", fontWeight: 700, fontSize: fs, lineHeight: 1, color: L2.a2 }, children: t }),
+    /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Mono", fontWeight: 700, fontSize: fs, lineHeight: 1, color: c }, children: t })
   ] });
-  return /* @__PURE__ */ jsxs86("div", { style: { ...flex6, position: "relative", width: w, height: h, background: L2.bg, color: L2.ink, fontFamily: "Sans" }, children: [
+  return /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "relative", width: w, height: h, background: L2.bg, color: L2.ink, fontFamily: "Sans" }, children: [
     grid,
-    /* @__PURE__ */ jsxs86("div", { style: { ...flex6, position: "absolute", left: 0, top: 0, width: w, height: h, padding: 72, flexDirection: "column", justifyContent: "space-between" }, children: [
-      /* @__PURE__ */ jsxs86("div", { style: { ...flex6, justifyContent: "space-between" }, children: [
+    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "absolute", left: 0, top: 0, width: w, height: h, padding: 72, flexDirection: "column", justifyContent: "space-between" }, children: [
+      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, justifyContent: "space-between" }, children: [
         hud("1UP", `@${owner.handle}`.slice(0, 16), L2.a1, "flex-start"),
         hud("HI-SCORE", String(big2(p)).padStart(6, "0"), L2.a3, "center"),
         hud("2UP", `@${p.who.handle}`.slice(0, 16), L2.a2, "flex-end")
       ] }),
-      /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", alignItems: "center" }, children: [
+      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", alignItems: "center" }, children: [
         shadow("PLAYER 2", sq ? 104 : st ? 150 : 116, L2.a3 === L2.a1 ? L2.a1 : L2.a3),
-        /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Mono", fontWeight: 700, fontSize: sq ? 46 : st ? 66 : 56, letterSpacing: 6, marginTop: 14, color: L2.ink }, children: "HAS JOINED" })
+        /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Mono", fontWeight: 700, fontSize: sq ? 46 : st ? 66 : 56, letterSpacing: 6, marginTop: 14, color: L2.ink }, children: "HAS JOINED" })
       ] }),
-      sq ? /* @__PURE__ */ jsxs86("div", { style: { ...flex6, alignItems: "center", gap: 44 }, children: [
+      sq ? /* @__PURE__ */ jsxs87("div", { style: { ...flex6, alignItems: "center", gap: 44 }, children: [
         frame,
-        /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", flex: 1, gap: 22 }, children: [
-          /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Mono", fontWeight: 700, fontSize: fit4(name, 34, 16), color: L2.a1 }, children: name.toUpperCase() }),
+        /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", flex: 1, gap: 22 }, children: [
+          /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Mono", fontWeight: 700, fontSize: fit4(name, 34, 16), color: L2.a1 }, children: name.toUpperCase() }),
           stats
         ] })
-      ] }) : /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", alignItems: "center", gap: st ? 44 : 26 }, children: [
+      ] }) : /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", alignItems: "center", gap: st ? 44 : 26 }, children: [
         frame,
-        /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Mono", fontWeight: 700, fontSize: fit4(name, st ? 50 : 42, 16), color: L2.a1 }, children: name.toUpperCase() }),
+        /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Mono", fontWeight: 700, fontSize: fit4(name, st ? 50 : 42, 16), color: L2.a1 }, children: name.toUpperCase() }),
         stats
       ] }),
-      /* @__PURE__ */ jsxs86("div", { style: { ...flex6, flexDirection: "column", gap: st ? 50 : 26 }, children: [
-        /* @__PURE__ */ jsxs86("div", { style: { ...flex6, justifyContent: "space-between", alignItems: "center" }, children: [
-          /* @__PURE__ */ jsx86("svg", { width: 154, height: 36, viewBox: "0 0 154 36", children: [0, 1, 2].map((i) => heart(i * 56, 0, 6, L2.a2, `h${i}`)) }),
-          /* @__PURE__ */ jsx86("span", { style: { fontFamily: "Mono", fontWeight: 700, fontSize: sq ? 24 : 28, letterSpacing: 3, color: L2.a3 }, children: "PRESS START TO FOLLOW" })
+      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", gap: st ? 50 : 26 }, children: [
+        /* @__PURE__ */ jsxs87("div", { style: { ...flex6, justifyContent: "space-between", alignItems: "center" }, children: [
+          /* @__PURE__ */ jsx87("svg", { width: 154, height: 36, viewBox: "0 0 154 36", children: [0, 1, 2].map((i) => heart(i * 56, 0, 6, L2.a2, `h${i}`)) }),
+          /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Mono", fontWeight: 700, fontSize: sq ? 24 : 28, letterSpacing: 3, color: L2.a3 }, children: "PRESS START TO FOLLOW" })
         ] }),
-        /* @__PURE__ */ jsx86(Foot, { owner, mark: p.mark, color: L2.sub })
+        /* @__PURE__ */ jsx87(Foot, { owner, mark: p.mark, color: L2.sub })
       ] })
     ] }),
     scan
@@ -14000,73 +14426,73 @@ var tm2_exports = {};
 __export(tm2_exports, {
   TM2_CARDS: () => TM2_CARDS
 });
-import { jsx as jsx87, jsxs as jsxs87 } from "react/jsx-runtime";
+import { jsx as jsx88, jsxs as jsxs88 } from "react/jsx-runtime";
 var dims5 = (size) => {
   let [w, h] = SIZE[size] ?? SIZE.square;
   return { w, h, iw: w - 144, sq: size === "square", pt: size === "portrait", st: size === "story" };
-}, Head = ({ t, kicker: kicker2, title, fs = 80 }) => /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column" }, children: [
-  /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Mono", fontSize: 22, letterSpacing: 4, color: t.accent }, children: kicker2 }),
-  /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Display", fontWeight: 500, fontSize: fs, lineHeight: 1.04, marginTop: 16 }, children: title })
+}, Head = ({ t, kicker: kicker2, title, fs = 80 }) => /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column" }, children: [
+  /* @__PURE__ */ jsx88("span", { style: { fontFamily: "Mono", fontSize: 22, letterSpacing: 4, color: t.accent }, children: kicker2 }),
+  /* @__PURE__ */ jsx88("span", { style: { fontFamily: "Display", fontWeight: 500, fontSize: fs, lineHeight: 1.04, marginTop: 16 }, children: title })
 ] }), Arrow = ({ w = 64, h = 24, c, sw = 3, dir = "right" }) => {
   let d = dir === "right" ? `M${sw} ${h / 2} H${w - sw - 1} M${w - h / 2 - sw} ${sw} L${w - sw - 1} ${h / 2} L${w - h / 2 - sw} ${h - sw}` : `M${w / 2} ${sw} V${h - sw - 1} M${sw} ${h - w / 2 - sw} L${w / 2} ${h - sw - 1} L${w - sw} ${h - w / 2 - sw}`;
-  return /* @__PURE__ */ jsx87("svg", { width: w, height: h, viewBox: `0 0 ${w} ${h}`, children: /* @__PURE__ */ jsx87("path", { d, stroke: c, strokeWidth: sw, fill: "none", strokeLinecap: "round", strokeLinejoin: "round" }) });
-}, Face3 = ({ per, d, t, then }) => /* @__PURE__ */ jsx87("div", { style: { ...flex6, width: d, height: d, flexShrink: 0 }, children: then ? faded(per.avatar, d, t) : vivid(per.avatar, d, t.now) }), Faces = ({ ppl, d, gap, t, then }) => /* @__PURE__ */ jsx87("div", { style: { ...flex6, gap }, children: ppl.map((x, k) => /* @__PURE__ */ jsx87(Face3, { per: x, d, t, then }, k)) }), nz2 = (v) => v === null ? "\u2013" : num(v), mmyy = (label2) => label2.replace(/ (\d\d)(\d\d)$/, " $2"), short = (h, n = 14) => h.length > n ? `${h.slice(0, n - 1)}\u2026` : h, Mono = ({ children, fs = 22, c, w = 400, ls = 0 }) => /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Mono", fontSize: fs, color: c, fontWeight: w, letterSpacing: ls }, children });
+  return /* @__PURE__ */ jsx88("svg", { width: w, height: h, viewBox: `0 0 ${w} ${h}`, children: /* @__PURE__ */ jsx88("path", { d, stroke: c, strokeWidth: sw, fill: "none", strokeLinecap: "round", strokeLinejoin: "round" }) });
+}, Face3 = ({ per, d, t, then }) => /* @__PURE__ */ jsx88("div", { style: { ...flex6, width: d, height: d, flexShrink: 0 }, children: then ? faded(per.avatar, d, t) : vivid(per.avatar, d, t.now) }), Faces = ({ ppl, d, gap, t, then }) => /* @__PURE__ */ jsx88("div", { style: { ...flex6, gap }, children: ppl.map((x, k) => /* @__PURE__ */ jsx88(Face3, { per: x, d, t, then }, k)) }), nz2 = (v) => v === null ? "\u2013" : num(v), mmyy = (label2) => label2.replace(/ (\d\d)(\d\d)$/, " $2"), short = (h, n = 14) => h.length > n ? `${h.slice(0, n - 1)}\u2026` : h, Mono = ({ children, fs = 22, c, w = 400, ls = 0 }) => /* @__PURE__ */ jsx88("span", { style: { fontFamily: "Mono", fontSize: fs, color: c, fontWeight: w, letterSpacing: ls }, children });
 function VhsCard(p, size, owner) {
-  let t = tmTheme(p.colour), { iw, sq, st } = dims5(size), body = ["#17120E", "#1F1D2B", "#1E1C19"][p.colour] ?? "#17120E", label2 = ["#EFE2C4", "#F4F1EC", "#FFFFFF"][p.colour] ?? "#EFE2C4", stripes = [["#F2B84B", "#E07B39", "#B5452B"], ["#8FA8FF", "#B48CFF", "#FF5A36"], ["#FF5A36", "#16130F", "#A4672C"]][p.colour] ?? ["#F2B84B", "#E07B39", "#B5452B"], th = sq ? 420 : st ? 820 : 540, lh = Math.round(th * (st ? 0.36 : 0.4)), ww = st ? 700 : 600, wh = th - lh - 34 - (st ? 110 : 70), r = Math.round(wh / 2) - 8, hub = Math.round(r * 1.28), fd = sq ? 68 : st ? 100 : 84, n = 5, side = (k, ppl, then, n1) => /* @__PURE__ */ jsxs87("div", { style: { ...flex6, alignItems: "center", justifyContent: "space-between", padding: sq ? "14px 0" : "20px 0", borderTop: `1px solid ${t.sub}` }, children: [
-    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", width: st ? 150 : 170 }, children: [
-      /* @__PURE__ */ jsx87(Mono, { fs: 24, c: then ? t.accent : t.now, w: 700, ls: 3, children: `SIDE ${k}` }),
-      /* @__PURE__ */ jsx87(Mono, { fs: 20, c: t.sub, children: then ? p.tm.thenLabel : p.tm.nowLabel })
+  let t = tmTheme(p.colour), { iw, sq, st } = dims5(size), body = ["#17120E", "#1F1D2B", "#1E1C19"][p.colour] ?? "#17120E", label2 = ["#EFE2C4", "#F4F1EC", "#FFFFFF"][p.colour] ?? "#EFE2C4", stripes = [["#F2B84B", "#E07B39", "#B5452B"], ["#8FA8FF", "#B48CFF", "#FF5A36"], ["#FF5A36", "#16130F", "#A4672C"]][p.colour] ?? ["#F2B84B", "#E07B39", "#B5452B"], th = sq ? 420 : st ? 820 : 540, lh = Math.round(th * (st ? 0.36 : 0.4)), ww = st ? 700 : 600, wh = th - lh - 34 - (st ? 110 : 70), r = Math.round(wh / 2) - 8, hub = Math.round(r * 1.28), fd = sq ? 68 : st ? 100 : 84, n = 5, side = (k, ppl, then, n1) => /* @__PURE__ */ jsxs88("div", { style: { ...flex6, alignItems: "center", justifyContent: "space-between", padding: sq ? "14px 0" : "20px 0", borderTop: `1px solid ${t.sub}` }, children: [
+    /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column", width: st ? 150 : 170 }, children: [
+      /* @__PURE__ */ jsx88(Mono, { fs: 24, c: then ? t.accent : t.now, w: 700, ls: 3, children: `SIDE ${k}` }),
+      /* @__PURE__ */ jsx88(Mono, { fs: 20, c: t.sub, children: then ? p.tm.thenLabel : p.tm.nowLabel })
     ] }),
-    /* @__PURE__ */ jsx87(Faces, { ppl: ppl.slice(0, n), d: fd, gap: 10, t, then }),
-    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", alignItems: "flex-end", width: 190 }, children: [
-      /* @__PURE__ */ jsx87(Mono, { fs: sq ? 38 : 46, w: 700, children: n1 }),
-      /* @__PURE__ */ jsx87("span", { style: { fontSize: 20, color: t.sub }, children: "followers" })
+    /* @__PURE__ */ jsx88(Faces, { ppl: ppl.slice(0, n), d: fd, gap: 10, t, then }),
+    /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column", alignItems: "flex-end", width: 190 }, children: [
+      /* @__PURE__ */ jsx88(Mono, { fs: sq ? 38 : 46, w: 700, children: n1 }),
+      /* @__PURE__ */ jsx88("span", { style: { fontSize: 20, color: t.sub }, children: "followers" })
     ] })
   ] });
-  return /* @__PURE__ */ jsxs87(Page, { size, t, owner, mark: p.mark, children: [
-    /* @__PURE__ */ jsx87(Head, { t, kicker: "X TIME MACHINE \xB7 REWIND THE TAPE", title: "Recorded over a year", fs: sq ? 66 : 80 }),
-    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "relative", width: iw, height: th, background: body, borderRadius: 26, boxShadow: "0 18px 40px rgba(0,0,0,0.35)" }, children: [
-      /* @__PURE__ */ jsxs87("svg", { width: iw, height: th, viewBox: `0 0 ${iw} ${th}`, style: { position: "absolute", left: 0, top: 0 }, children: [
-        [[22, 22], [iw - 22, 22], [22, th - 22], [iw - 22, th - 22]].map(([x, y], k) => /* @__PURE__ */ jsxs87("g", { children: [
-          /* @__PURE__ */ jsx87("circle", { cx: x, cy: y, r: 7, fill: "#2E2A26" }),
-          /* @__PURE__ */ jsx87("path", { d: `M${x - 4} ${y} H${x + 4}`, stroke: "#0B0B0B", strokeWidth: 2 })
+  return /* @__PURE__ */ jsxs88(Page, { size, t, owner, mark: p.mark, children: [
+    /* @__PURE__ */ jsx88(Head, { t, kicker: "X TIME MACHINE \xB7 REWIND THE TAPE", title: "Recorded over a year", fs: sq ? 66 : 80 }),
+    /* @__PURE__ */ jsxs88("div", { style: { ...flex6, position: "relative", width: iw, height: th, background: body, borderRadius: 26, boxShadow: "0 18px 40px rgba(0,0,0,0.35)" }, children: [
+      /* @__PURE__ */ jsxs88("svg", { width: iw, height: th, viewBox: `0 0 ${iw} ${th}`, style: { position: "absolute", left: 0, top: 0 }, children: [
+        [[22, 22], [iw - 22, 22], [22, th - 22], [iw - 22, th - 22]].map(([x, y], k) => /* @__PURE__ */ jsxs88("g", { children: [
+          /* @__PURE__ */ jsx88("circle", { cx: x, cy: y, r: 7, fill: "#2E2A26" }),
+          /* @__PURE__ */ jsx88("path", { d: `M${x - 4} ${y} H${x + 4}`, stroke: "#0B0B0B", strokeWidth: 2 })
         ] }, k)),
-        /* @__PURE__ */ jsx87("path", { d: `M${iw / 2 - ww / 2 - 80} ${th} L${iw / 2 - ww / 2 - 40} ${th - 46} H${iw / 2 + ww / 2 + 40} L${iw / 2 + ww / 2 + 80} ${th}`, fill: "#000", fillOpacity: 0.35 })
+        /* @__PURE__ */ jsx88("path", { d: `M${iw / 2 - ww / 2 - 80} ${th} L${iw / 2 - ww / 2 - 40} ${th - 46} H${iw / 2 + ww / 2 + 40} L${iw / 2 + ww / 2 + 80} ${th}`, fill: "#000", fillOpacity: 0.35 })
       ] }),
-      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", position: "absolute", left: 44, top: 34, width: iw - 88, height: lh, background: label2, borderRadius: 10, overflow: "hidden" }, children: [
-        stripes.map((c, k) => /* @__PURE__ */ jsx87("div", { style: { ...flex6, height: 9, background: c } }, k)),
-        /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", flex: 1, justifyContent: "center", padding: "0 30px" }, children: [
-          /* @__PURE__ */ jsxs87("div", { style: { ...flex6, alignItems: "center", gap: 22 }, children: [
-            /* @__PURE__ */ jsx87(Mono, { fs: sq ? 50 : st ? 66 : 58, c: "#1A1410", w: 700, children: p.tm.thenLabel }),
-            /* @__PURE__ */ jsx87(Arrow, { w: 70, h: 30, c: stripes[2], sw: 4 }),
-            /* @__PURE__ */ jsx87(Mono, { fs: sq ? 50 : st ? 66 : 58, c: "#1A1410", w: 700, children: p.tm.nowLabel })
+      /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column", position: "absolute", left: 44, top: 34, width: iw - 88, height: lh, background: label2, borderRadius: 10, overflow: "hidden" }, children: [
+        stripes.map((c, k) => /* @__PURE__ */ jsx88("div", { style: { ...flex6, height: 9, background: c } }, k)),
+        /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column", flex: 1, justifyContent: "center", padding: "0 30px" }, children: [
+          /* @__PURE__ */ jsxs88("div", { style: { ...flex6, alignItems: "center", gap: 22 }, children: [
+            /* @__PURE__ */ jsx88(Mono, { fs: sq ? 50 : st ? 66 : 58, c: "#1A1410", w: 700, children: p.tm.thenLabel }),
+            /* @__PURE__ */ jsx88(Arrow, { w: 70, h: 30, c: stripes[2], sw: 4 }),
+            /* @__PURE__ */ jsx88(Mono, { fs: sq ? 50 : st ? 66 : 58, c: "#1A1410", w: 700, children: p.tm.nowLabel })
           ] }),
-          /* @__PURE__ */ jsxs87("div", { style: { ...flex6, justifyContent: "space-between", marginTop: 10 }, children: [
-            /* @__PURE__ */ jsx87(Mono, { fs: st ? 24 : 20, c: "rgba(26,20,16,0.65)", children: `MY YEAR ON X \xB7 @${short(owner.handle, 18)}` }),
-            /* @__PURE__ */ jsx87(Mono, { fs: st ? 24 : 20, c: "rgba(26,20,16,0.65)", children: "SP \xB7 365 DAYS" })
+          /* @__PURE__ */ jsxs88("div", { style: { ...flex6, justifyContent: "space-between", marginTop: 10 }, children: [
+            /* @__PURE__ */ jsx88(Mono, { fs: st ? 24 : 20, c: "rgba(26,20,16,0.65)", children: `MY YEAR ON X \xB7 @${short(owner.handle, 18)}` }),
+            /* @__PURE__ */ jsx88(Mono, { fs: st ? 24 : 20, c: "rgba(26,20,16,0.65)", children: "SP \xB7 365 DAYS" })
           ] })
         ] })
       ] }),
-      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "absolute", left: (iw - ww) / 2, top: 34 + lh + 26, width: ww, height: wh, background: "#050505", borderRadius: 18, border: "3px solid #2B2724" }, children: [
-        /* @__PURE__ */ jsxs87("svg", { width: ww - 6, height: wh - 6, viewBox: `0 0 ${ww - 6} ${wh - 6}`, style: { position: "absolute", left: 0, top: 0 }, children: [
-          /* @__PURE__ */ jsx87("circle", { cx: wh / 2, cy: wh / 2 - 3, r, fill: "#3A2A1E" }),
-          /* @__PURE__ */ jsx87("circle", { cx: ww - 6 - wh / 2, cy: wh / 2 - 3, r: r * 0.72, fill: "#3A2A1E" }),
-          /* @__PURE__ */ jsx87("path", { d: `M${wh / 2} ${wh / 2 - 3 + r} H${ww - 6 - wh / 2}`, stroke: "#3A2A1E", strokeWidth: 4 }),
-          /* @__PURE__ */ jsx87("rect", { x: ww / 2 - 80, y: wh / 2 - 26, width: 160, height: 46, rx: 6, fill: "none", stroke: "#2B2724", strokeWidth: 2 })
+      /* @__PURE__ */ jsxs88("div", { style: { ...flex6, position: "absolute", left: (iw - ww) / 2, top: 34 + lh + 26, width: ww, height: wh, background: "#050505", borderRadius: 18, border: "3px solid #2B2724" }, children: [
+        /* @__PURE__ */ jsxs88("svg", { width: ww - 6, height: wh - 6, viewBox: `0 0 ${ww - 6} ${wh - 6}`, style: { position: "absolute", left: 0, top: 0 }, children: [
+          /* @__PURE__ */ jsx88("circle", { cx: wh / 2, cy: wh / 2 - 3, r, fill: "#3A2A1E" }),
+          /* @__PURE__ */ jsx88("circle", { cx: ww - 6 - wh / 2, cy: wh / 2 - 3, r: r * 0.72, fill: "#3A2A1E" }),
+          /* @__PURE__ */ jsx88("path", { d: `M${wh / 2} ${wh / 2 - 3 + r} H${ww - 6 - wh / 2}`, stroke: "#3A2A1E", strokeWidth: 4 }),
+          /* @__PURE__ */ jsx88("rect", { x: ww / 2 - 80, y: wh / 2 - 26, width: 160, height: 46, rx: 6, fill: "none", stroke: "#2B2724", strokeWidth: 2 })
         ] }),
-        /* @__PURE__ */ jsx87("div", { style: { ...flex6, position: "absolute", left: wh / 2 - hub / 2 - 3, top: wh / 2 - hub / 2 - 6 }, children: /* @__PURE__ */ jsx87(Face3, { per: p.then[0], d: hub, t, then: !0 }) }),
-        /* @__PURE__ */ jsx87("div", { style: { ...flex6, position: "absolute", left: ww - 6 - wh / 2 - hub / 2 - 3, top: wh / 2 - hub / 2 - 6 }, children: /* @__PURE__ */ jsx87(Face3, { per: p.now[0], d: hub, t, then: !1 }) })
+        /* @__PURE__ */ jsx88("div", { style: { ...flex6, position: "absolute", left: wh / 2 - hub / 2 - 3, top: wh / 2 - hub / 2 - 6 }, children: /* @__PURE__ */ jsx88(Face3, { per: p.then[0], d: hub, t, then: !0 }) }),
+        /* @__PURE__ */ jsx88("div", { style: { ...flex6, position: "absolute", left: ww - 6 - wh / 2 - hub / 2 - 3, top: wh / 2 - hub / 2 - 6 }, children: /* @__PURE__ */ jsx88(Face3, { per: p.now[0], d: hub, t, then: !1 }) })
       ] })
     ] }),
-    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column" }, children: [
+    /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column" }, children: [
       side("A", p.then, !0, nz2(p.tm.followersThen)),
       side("B", p.now, !1, num(p.tm.followersNow)),
-      st && /* @__PURE__ */ jsxs87("div", { style: { ...flex6, alignItems: "center", justifyContent: "space-between", marginTop: 24, background: "#050505", borderRadius: 16, padding: "22px 28px" }, children: [
-        /* @__PURE__ */ jsxs87("div", { style: { ...flex6, alignItems: "center", gap: 16 }, children: [
-          /* @__PURE__ */ jsx87("svg", { width: 30, height: 34, viewBox: "0 0 30 34", children: /* @__PURE__ */ jsx87("path", { d: "M2 2 L28 17 L2 32 Z", fill: "#5CFF9A" }) }),
-          /* @__PURE__ */ jsx87(Mono, { fs: 32, c: "#5CFF9A", w: 700, children: "PLAY" })
+      st && /* @__PURE__ */ jsxs88("div", { style: { ...flex6, alignItems: "center", justifyContent: "space-between", marginTop: 24, background: "#050505", borderRadius: 16, padding: "22px 28px" }, children: [
+        /* @__PURE__ */ jsxs88("div", { style: { ...flex6, alignItems: "center", gap: 16 }, children: [
+          /* @__PURE__ */ jsx88("svg", { width: 30, height: 34, viewBox: "0 0 30 34", children: /* @__PURE__ */ jsx88("path", { d: "M2 2 L28 17 L2 32 Z", fill: "#5CFF9A" }) }),
+          /* @__PURE__ */ jsx88(Mono, { fs: 32, c: "#5CFF9A", w: 700, children: "PLAY" })
         ] }),
-        /* @__PURE__ */ jsx87(Mono, { fs: 32, c: "#5CFF9A", children: `${nz2(p.tm.yearPosts)} POSTS \xB7 ${nz2(p.tm.yearReplies)} REPLIES` })
+        /* @__PURE__ */ jsx88(Mono, { fs: 32, c: "#5CFF9A", children: `${nz2(p.tm.yearPosts)} POSTS \xB7 ${nz2(p.tm.yearReplies)} REPLIES` })
       ] })
     ] })
   ] });
@@ -14074,43 +14500,43 @@ function VhsCard(p, size, owner) {
 function CalendarCard(p, size, owner) {
   let t = tmTheme(p.colour), { iw, sq, st } = dims5(size), paper = ["#F1E6CF", "#F4F1EC", "#FFFFFF"][p.colour] ?? "#F1E6CF", ink2 = "#1C1712", pw = st ? 720 : 440, ph = sq ? 560 : st ? 630 : 740, sheet = (then) => {
     let top = then ? ["#9C7B57", "#5B5F7A", "#B9A58C"][p.colour] ?? "#9C7B57" : t.now, ppl = (then ? p.then : p.now).slice(0, 3), fd = st ? 96 : 80;
-    return /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", width: pw, height: ph, background: paper, borderRadius: 18, overflow: "hidden", boxShadow: "0 16px 36px rgba(0,0,0,0.3)", transform: `rotate(${then ? -3 : 2}deg)`, opacity: then ? 0.86 : 1 }, children: [
-      /* @__PURE__ */ jsx87("div", { style: { ...flex6, height: st ? 120 : 110, background: top, alignItems: "flex-end", justifyContent: "center", paddingBottom: 18 }, children: /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Heavy", fontWeight: 800, fontSize: 40, color: "#fff", letterSpacing: 4 }, children: `${(then ? p.tm.yearAgo : p.tm.today).month.toUpperCase()} ${(then ? p.tm.yearAgo : p.tm.today).year}` }) }),
-      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", alignItems: "center", flex: 1, justifyContent: "space-between", padding: "10px 0 30px" }, children: [
-        /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", alignItems: "center" }, children: [
-          /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Heavy", fontWeight: 800, fontSize: sq ? 190 : st ? 250 : 240, lineHeight: 1, color: then ? "rgba(28,23,18,0.6)" : ink2 }, children: String((then ? p.tm.yearAgo : p.tm.today).d) }),
-          /* @__PURE__ */ jsx87(Mono, { fs: 26, c: "rgba(28,23,18,0.6)", ls: 4, children: (then ? p.tm.yearAgo : p.tm.today).weekday.toUpperCase() })
+    return /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column", width: pw, height: ph, background: paper, borderRadius: 18, overflow: "hidden", boxShadow: "0 16px 36px rgba(0,0,0,0.3)", transform: `rotate(${then ? -3 : 2}deg)`, opacity: then ? 0.86 : 1 }, children: [
+      /* @__PURE__ */ jsx88("div", { style: { ...flex6, height: st ? 120 : 110, background: top, alignItems: "flex-end", justifyContent: "center", paddingBottom: 18 }, children: /* @__PURE__ */ jsx88("span", { style: { fontFamily: "Heavy", fontWeight: 800, fontSize: 40, color: "#fff", letterSpacing: 4 }, children: `${(then ? p.tm.yearAgo : p.tm.today).month.toUpperCase()} ${(then ? p.tm.yearAgo : p.tm.today).year}` }) }),
+      /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column", alignItems: "center", flex: 1, justifyContent: "space-between", padding: "10px 0 30px" }, children: [
+        /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column", alignItems: "center" }, children: [
+          /* @__PURE__ */ jsx88("span", { style: { fontFamily: "Heavy", fontWeight: 800, fontSize: sq ? 190 : st ? 250 : 240, lineHeight: 1, color: then ? "rgba(28,23,18,0.6)" : ink2 }, children: String((then ? p.tm.yearAgo : p.tm.today).d) }),
+          /* @__PURE__ */ jsx88(Mono, { fs: 26, c: "rgba(28,23,18,0.6)", ls: 4, children: (then ? p.tm.yearAgo : p.tm.today).weekday.toUpperCase() })
         ] }),
-        /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", alignItems: "center", gap: 14 }, children: [
-          /* @__PURE__ */ jsx87(Mono, { fs: sq ? 32 : 36, c: ink2, w: 700, children: `${nz2(then ? p.tm.followersYearAgo : p.tm.followersNow)} followers` }),
-          /* @__PURE__ */ jsx87(Faces, { ppl, d: fd, gap: 10, t: { ...t, card: paper }, then })
+        /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column", alignItems: "center", gap: 14 }, children: [
+          /* @__PURE__ */ jsx88(Mono, { fs: sq ? 32 : 36, c: ink2, w: 700, children: `${nz2(then ? p.tm.followersYearAgo : p.tm.followersNow)} followers` }),
+          /* @__PURE__ */ jsx88(Faces, { ppl, d: fd, gap: 10, t: { ...t, card: paper }, then })
         ] })
       ] })
     ] });
-  }, rings2 = /* @__PURE__ */ jsx87("svg", { width: pw, height: 40, viewBox: `0 0 ${pw} 40`, style: { position: "absolute", left: 0, top: -18 }, children: [0.25, 0.75].map((f, k) => /* @__PURE__ */ jsx87("rect", { x: pw * f - 9, y: 2, width: 18, height: 36, rx: 9, fill: "#8C8A86", stroke: "#4A4743", strokeWidth: 2 }, k)) }), wrap = (then, extra = {}) => /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "relative", ...extra }, children: [
+  }, rings2 = /* @__PURE__ */ jsx88("svg", { width: pw, height: 40, viewBox: `0 0 ${pw} 40`, style: { position: "absolute", left: 0, top: -18 }, children: [0.25, 0.75].map((f, k) => /* @__PURE__ */ jsx88("rect", { x: pw * f - 9, y: 2, width: 18, height: 36, rx: 9, fill: "#8C8A86", stroke: "#4A4743", strokeWidth: 2 }, k)) }), wrap = (then, extra = {}) => /* @__PURE__ */ jsxs88("div", { style: { ...flex6, position: "relative", ...extra }, children: [
     sheet(then),
-    /* @__PURE__ */ jsx87("div", { style: { ...flex6, position: "absolute", left: 0, top: 0, width: pw, height: 40, transform: `rotate(${then ? -3 : 2}deg)` }, children: rings2 })
+    /* @__PURE__ */ jsx88("div", { style: { ...flex6, position: "absolute", left: 0, top: 0, width: pw, height: 40, transform: `rotate(${then ? -3 : 2}deg)` }, children: rings2 })
   ] });
-  return /* @__PURE__ */ jsxs87(Page, { size, t, owner, mark: p.mark, children: [
-    /* @__PURE__ */ jsx87(Head, { t, kicker: "X TIME MACHINE \xB7 TEAR-OFF CALENDAR", title: "Same date, one year on", fs: sq ? 66 : 80 }),
-    st ? /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", gap: 50, marginTop: 30 }, children: [
+  return /* @__PURE__ */ jsxs88(Page, { size, t, owner, mark: p.mark, children: [
+    /* @__PURE__ */ jsx88(Head, { t, kicker: "X TIME MACHINE \xB7 TEAR-OFF CALENDAR", title: "Same date, one year on", fs: sq ? 66 : 80 }),
+    st ? /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column", gap: 50, marginTop: 30 }, children: [
       wrap(!0, { alignSelf: "flex-start", marginLeft: 20 }),
       wrap(!1, { alignSelf: "flex-end", marginRight: 20 })
-    ] }) : /* @__PURE__ */ jsxs87("div", { style: { ...flex6, justifyContent: "space-between", alignItems: "center", width: iw, padding: "0 10px" }, children: [
+    ] }) : /* @__PURE__ */ jsxs88("div", { style: { ...flex6, justifyContent: "space-between", alignItems: "center", width: iw, padding: "0 10px" }, children: [
       wrap(!0),
       wrap(!1)
     ] }),
-    /* @__PURE__ */ jsx87("span", { style: { fontSize: sq ? 28 : 32, color: t.sub, lineHeight: 1.35 }, children: `365 pages torn off: ${nz2(p.tm.yearPosts)} posts and ${nz2(p.tm.yearReplies)} replies in 12 months, ${p.tm.followersYearAgo === null ? "and" : `and ${signed(p.tm.followersNow - p.tm.followersYearAgo)}`} followers in between.` })
+    /* @__PURE__ */ jsx88("span", { style: { fontSize: sq ? 28 : 32, color: t.sub, lineHeight: 1.35 }, children: `365 pages torn off: ${nz2(p.tm.yearPosts)} posts and ${nz2(p.tm.yearReplies)} replies in 12 months, ${p.tm.followersYearAgo === null ? "and" : `and ${signed(p.tm.followersNow - p.tm.followersYearAgo)}`} followers in between.` })
   ] });
 }
 var Wheels = ({ value, cw, chh, fs, t, roll = !0 }) => {
   let ink2 = "#14110D";
-  return /* @__PURE__ */ jsx87("div", { style: { ...flex6, alignItems: "center", gap: Math.round(cw * 0.08), background: "#0E0C0A", padding: Math.round(cw * 0.1), borderRadius: Math.round(cw * 0.16), border: `3px solid ${t.accent}` }, children: value.split("").map((ch, k) => {
-    if (ch === ",") return /* @__PURE__ */ jsx87("div", { style: { ...flex6, width: Math.round(cw * 0.3), height: chh, alignItems: "flex-end", justifyContent: "center", paddingBottom: chh * 0.12 }, children: /* @__PURE__ */ jsx87("div", { style: { ...flex6, width: cw * 0.12, height: cw * 0.2, borderRadius: 4, background: "#E9E3D6" } }) }, k);
+  return /* @__PURE__ */ jsx88("div", { style: { ...flex6, alignItems: "center", gap: Math.round(cw * 0.08), background: "#0E0C0A", padding: Math.round(cw * 0.1), borderRadius: Math.round(cw * 0.16), border: `3px solid ${t.accent}` }, children: value.split("").map((ch, k) => {
+    if (ch === ",") return /* @__PURE__ */ jsx88("div", { style: { ...flex6, width: Math.round(cw * 0.3), height: chh, alignItems: "flex-end", justifyContent: "center", paddingBottom: chh * 0.12 }, children: /* @__PURE__ */ jsx88("div", { style: { ...flex6, width: cw * 0.12, height: cw * 0.2, borderRadius: 4, background: "#E9E3D6" } }) }, k);
     let d = Number(ch), digs = [(d + 9) % 10, d, (d + 1) % 10];
     return (
       // the drum's shading is its ground (it used to be laid over the digits, dimming the reading)
-      /* @__PURE__ */ jsx87("div", { style: { ...flex6, position: "relative", width: cw, height: chh, overflow: "hidden", borderRadius: 6, backgroundColor: "#F4F1EC", backgroundImage: "linear-gradient(180deg, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.05) 32%, rgba(255,255,255,0.12) 50%, rgba(0,0,0,0.05) 68%, rgba(0,0,0,0.75) 100%)" }, children: /* @__PURE__ */ jsx87("div", { style: { ...flex6, flexDirection: "column", position: "absolute", left: 0, top: chh / 2 - chh * 0.62 * (roll && k === value.length - 1 ? 1.62 : 1.5), width: cw }, children: digs.map((x, j) => /* @__PURE__ */ jsx87("div", { ...j === 1 ? {} : { "data-decor": "the odometer's rolling digits above and below the reading, cut by the drum on purpose" }, style: { ...flex6, width: cw, height: chh * 0.62, alignItems: "center", justifyContent: "center", fontFamily: "Mono", fontWeight: 700, fontSize: fs, color: ink2 }, children: String(x) }, j)) }) }, k)
+      /* @__PURE__ */ jsx88("div", { style: { ...flex6, position: "relative", width: cw, height: chh, overflow: "hidden", borderRadius: 6, backgroundColor: "#F4F1EC", backgroundImage: "linear-gradient(180deg, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.05) 32%, rgba(255,255,255,0.12) 50%, rgba(0,0,0,0.05) 68%, rgba(0,0,0,0.75) 100%)" }, children: /* @__PURE__ */ jsx88("div", { style: { ...flex6, flexDirection: "column", position: "absolute", left: 0, top: chh / 2 - chh * 0.62 * (roll && k === value.length - 1 ? 1.62 : 1.5), width: cw }, children: digs.map((x, j) => /* @__PURE__ */ jsx88("div", { ...j === 1 ? {} : { "data-decor": "the odometer's rolling digits above and below the reading, cut by the drum on purpose" }, style: { ...flex6, width: cw, height: chh * 0.62, alignItems: "center", justifyContent: "center", fontFamily: "Mono", fontWeight: 700, fontSize: fs, color: ink2 }, children: String(x) }, j)) }) }, k)
     );
   }) });
 };
@@ -14118,31 +14544,31 @@ function OdometerCard(p, size, owner) {
   let t = tmTheme(p.colour), { sq, st } = dims5(size), big3 = sq ? { cw: 150, chh: 220, fs: 130 } : st ? { cw: 180, chh: 300, fs: 160 } : { cw: 160, chh: 250, fs: 140 }, tw = sq ? 42 : st ? 58 : 50, tch = sq ? 62 : st ? 86 : 74, tfs = sq ? 36 : st ? 50 : 44, lfs = sq ? 26 : st ? 34 : 30, pair = (a, b) => {
     let w = Math.max(3, String(a ?? 0).length, String(b ?? 0).length);
     return [String(a ?? 0).padStart(w, "0"), String(b ?? 0).padStart(w, "0")];
-  }, trip = (label2, a, b) => /* @__PURE__ */ jsxs87("div", { style: { ...flex6, alignItems: "center", justifyContent: "space-between", padding: sq ? "14px 0" : st ? "28px 0" : "20px 0", borderTop: `1px solid ${t.sub}` }, children: [
-    /* @__PURE__ */ jsx87("span", { style: { fontSize: lfs, color: t.sub, width: 300 }, children: label2 }),
-    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, alignItems: "center", gap: 18 }, children: [
-      /* @__PURE__ */ jsx87("div", { style: { ...flex6, opacity: 0.55 }, children: /* @__PURE__ */ jsx87(Wheels, { value: a, cw: tw, chh: tch, fs: tfs, t, roll: !1 }) }),
-      /* @__PURE__ */ jsx87(Arrow, { w: 48, h: 22, c: t.sub }),
-      /* @__PURE__ */ jsx87(Wheels, { value: b, cw: tw, chh: tch, fs: tfs, t, roll: !1 })
+  }, trip = (label2, a, b) => /* @__PURE__ */ jsxs88("div", { style: { ...flex6, alignItems: "center", justifyContent: "space-between", padding: sq ? "14px 0" : st ? "28px 0" : "20px 0", borderTop: `1px solid ${t.sub}` }, children: [
+    /* @__PURE__ */ jsx88("span", { style: { fontSize: lfs, color: t.sub, width: 300 }, children: label2 }),
+    /* @__PURE__ */ jsxs88("div", { style: { ...flex6, alignItems: "center", gap: 18 }, children: [
+      /* @__PURE__ */ jsx88("div", { style: { ...flex6, opacity: 0.55 }, children: /* @__PURE__ */ jsx88(Wheels, { value: a, cw: tw, chh: tch, fs: tfs, t, roll: !1 }) }),
+      /* @__PURE__ */ jsx88(Arrow, { w: 48, h: 22, c: t.sub }),
+      /* @__PURE__ */ jsx88(Wheels, { value: b, cw: tw, chh: tch, fs: tfs, t, roll: !1 })
     ] })
   ] });
-  return /* @__PURE__ */ jsxs87(Page, { size, t, owner, mark: p.mark, children: [
-    /* @__PURE__ */ jsx87(Head, { t, kicker: "X TIME MACHINE \xB7 ODOMETER", title: "12 months on the clock", fs: sq ? 66 : 80 }),
-    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", alignItems: "center", gap: sq ? 14 : 22 }, children: [
-      /* @__PURE__ */ jsx87(Mono, { fs: 24, c: t.sub, ls: 6, children: "FOLLOWERS" }),
-      /* @__PURE__ */ jsx87(Wheels, { value: num(p.tm.followersNow), ...big3, t }),
-      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, alignItems: "center", gap: 14 }, children: [
-        /* @__PURE__ */ jsx87("span", { style: { fontSize: lfs, color: t.sub }, children: "was" }),
-        /* @__PURE__ */ jsx87(Mono, { fs: lfs + 4, c: t.accent, w: 700, children: nz2(p.tm.followersYearAgo) }),
-        /* @__PURE__ */ jsx87("span", { style: { fontSize: lfs, color: t.sub }, children: `on ${p.tm.yearAgo.d} ${p.tm.yearAgo.mon} ${p.tm.yearAgo.year}${p.tm.followersYearAgo === null ? "" : ` \xB7 ${signed(p.tm.followersNow - p.tm.followersYearAgo)} since`}` })
+  return /* @__PURE__ */ jsxs88(Page, { size, t, owner, mark: p.mark, children: [
+    /* @__PURE__ */ jsx88(Head, { t, kicker: "X TIME MACHINE \xB7 ODOMETER", title: "12 months on the clock", fs: sq ? 66 : 80 }),
+    /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column", alignItems: "center", gap: sq ? 14 : 22 }, children: [
+      /* @__PURE__ */ jsx88(Mono, { fs: 24, c: t.sub, ls: 6, children: "FOLLOWERS" }),
+      /* @__PURE__ */ jsx88(Wheels, { value: num(p.tm.followersNow), ...big3, t }),
+      /* @__PURE__ */ jsxs88("div", { style: { ...flex6, alignItems: "center", gap: 14 }, children: [
+        /* @__PURE__ */ jsx88("span", { style: { fontSize: lfs, color: t.sub }, children: "was" }),
+        /* @__PURE__ */ jsx88(Mono, { fs: lfs + 4, c: t.accent, w: 700, children: nz2(p.tm.followersYearAgo) }),
+        /* @__PURE__ */ jsx88("span", { style: { fontSize: lfs, color: t.sub }, children: `on ${p.tm.yearAgo.d} ${p.tm.yearAgo.mon} ${p.tm.yearAgo.year}${p.tm.followersYearAgo === null ? "" : ` \xB7 ${signed(p.tm.followersNow - p.tm.followersYearAgo)} since`}` })
       ] })
     ] }),
-    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column" }, children: [
+    /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column" }, children: [
       trip("Posts a month", ...pair(p.tm.postsThen, p.tm.postsNow)),
       trip("Replies a month", ...pair(p.tm.repliesThen, p.tm.repliesNow)),
-      !sq && /* @__PURE__ */ jsxs87("div", { style: { ...flex6, alignItems: "center", justifyContent: "space-between", padding: "20px 0 0", borderTop: `1px solid ${t.sub}` }, children: [
-        /* @__PURE__ */ jsx87("span", { style: { fontSize: lfs, color: t.sub, width: 280 }, children: "Who I talk with now" }),
-        /* @__PURE__ */ jsx87(Faces, { ppl: p.now.slice(0, 5), d: st ? 100 : 84, gap: 12, t, then: !1 })
+      !sq && /* @__PURE__ */ jsxs88("div", { style: { ...flex6, alignItems: "center", justifyContent: "space-between", padding: "20px 0 0", borderTop: `1px solid ${t.sub}` }, children: [
+        /* @__PURE__ */ jsx88("span", { style: { fontSize: lfs, color: t.sub, width: 280 }, children: "Who I talk with now" }),
+        /* @__PURE__ */ jsx88(Faces, { ppl: p.now.slice(0, 5), d: st ? 100 : 84, gap: 12, t, then: !1 })
       ] })
     ] })
   ] });
@@ -14154,66 +14580,66 @@ var ratioLine = (p) => {
 function BeforeAfterCard(p, size, owner) {
   let t = tmTheme(p.colour), { iw, sq, st } = dims5(size), half = iw / 2, ph = sq ? 640 : st ? 1340 : 900, rows = sq ? 2 : st ? 4 : 3, d = sq ? 108 : st ? 110 : 100, gap = 16, left = ["#3B2C20", "#1A1824", "#E3D8C3"][p.colour] ?? "#3B2C20", right = ["#4A2A1E", "#221A33", "#FFFFFF"][p.colour] ?? "#4A2A1E", lineC = p.colour === 2 ? "#16130F" : "#FFFFFF", halfBox = (then) => {
     let ppl = (then ? p.then : p.now).slice(0, rows * 3), m = p.tm, stats = then ? [["Posts a month", nz2(m.postsThen)], ["Replies a month", nz2(m.repliesThen)], ["Style", m.styleThen ?? "\u2013"]] : [["Posts a month", nz2(m.postsNow)], ["Replies a month", nz2(m.repliesNow)], ["Style", m.styleNow ?? "\u2013"]];
-    return /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", width: half, height: ph, background: then ? left : right, padding: then ? "40px 70px 40px 36px" : "40px 36px 40px 70px", justifyContent: "space-between" }, children: [
-      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column" }, children: [
-        /* @__PURE__ */ jsx87(Mono, { fs: 22, c: then ? t.accent : t.now, w: 700, ls: 4, children: then ? `BEFORE \xB7 ${m.thenLabel}` : `AFTER \xB7 ${m.nowLabel}` }),
-        /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Heavy", fontWeight: 800, fontSize: sq ? 92 : st ? 120 : 100, lineHeight: 1, marginTop: 10, color: then ? t.sub : t.ink }, children: then ? nz2(m.followersThen) : num(m.followersNow) }),
-        /* @__PURE__ */ jsx87("span", { style: { fontSize: st ? 28 : 22, color: t.sub }, children: "followers" })
+    return /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column", width: half, height: ph, background: then ? left : right, padding: then ? "40px 70px 40px 36px" : "40px 36px 40px 70px", justifyContent: "space-between" }, children: [
+      /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column" }, children: [
+        /* @__PURE__ */ jsx88(Mono, { fs: 22, c: then ? t.accent : t.now, w: 700, ls: 4, children: then ? `BEFORE \xB7 ${m.thenLabel}` : `AFTER \xB7 ${m.nowLabel}` }),
+        /* @__PURE__ */ jsx88("span", { style: { fontFamily: "Heavy", fontWeight: 800, fontSize: sq ? 92 : st ? 120 : 100, lineHeight: 1, marginTop: 10, color: then ? t.sub : t.ink }, children: then ? nz2(m.followersThen) : num(m.followersNow) }),
+        /* @__PURE__ */ jsx88("span", { style: { fontSize: st ? 28 : 22, color: t.sub }, children: "followers" })
       ] }),
-      /* @__PURE__ */ jsx87("div", { style: { ...flex6, flexWrap: "wrap", gap, width: d * 3 + gap * 2 + 1 }, children: ppl.map((x, k) => /* @__PURE__ */ jsx87(Face3, { per: x, d, t: { ...t, card: then ? left : right }, then }, k)) }),
-      !sq && /* @__PURE__ */ jsx87("div", { style: { ...flex6, flexDirection: "column", gap: st ? 18 : 8 }, children: stats.map(([l, v], k) => /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", borderTop: `1px solid ${t.sub}`, paddingTop: st ? 14 : 8 }, children: [
-        /* @__PURE__ */ jsx87("span", { style: { fontSize: st ? 26 : 20, color: t.sub }, children: l }),
-        /* @__PURE__ */ jsx87(Mono, { fs: v.length > 6 ? st ? 28 : 24 : st ? 48 : 34, w: 700, c: then ? t.sub : t.ink, children: v })
+      /* @__PURE__ */ jsx88("div", { style: { ...flex6, flexWrap: "wrap", gap, width: d * 3 + gap * 2 + 1 }, children: ppl.map((x, k) => /* @__PURE__ */ jsx88(Face3, { per: x, d, t: { ...t, card: then ? left : right }, then }, k)) }),
+      !sq && /* @__PURE__ */ jsx88("div", { style: { ...flex6, flexDirection: "column", gap: st ? 18 : 8 }, children: stats.map(([l, v], k) => /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column", borderTop: `1px solid ${t.sub}`, paddingTop: st ? 14 : 8 }, children: [
+        /* @__PURE__ */ jsx88("span", { style: { fontSize: st ? 26 : 20, color: t.sub }, children: l }),
+        /* @__PURE__ */ jsx88(Mono, { fs: v.length > 6 ? st ? 28 : 24 : st ? 48 : 34, w: 700, c: then ? t.sub : t.ink, children: v })
       ] }, k)) })
     ] });
   };
-  return /* @__PURE__ */ jsxs87(Page, { size, t, owner, mark: p.mark, children: [
-    /* @__PURE__ */ jsx87(Head, { t, kicker: "X TIME MACHINE \xB7 BEFORE / AFTER", title: "Drag to see a year", fs: sq ? 66 : 80 }),
-    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "relative", width: iw, height: ph, borderRadius: 26, overflow: "hidden" }, children: [
+  return /* @__PURE__ */ jsxs88(Page, { size, t, owner, mark: p.mark, children: [
+    /* @__PURE__ */ jsx88(Head, { t, kicker: "X TIME MACHINE \xB7 BEFORE / AFTER", title: "Drag to see a year", fs: sq ? 66 : 80 }),
+    /* @__PURE__ */ jsxs88("div", { style: { ...flex6, position: "relative", width: iw, height: ph, borderRadius: 26, overflow: "hidden" }, children: [
       halfBox(!0),
       halfBox(!1),
-      /* @__PURE__ */ jsx87("div", { style: { ...flex6, position: "absolute", left: half - 2, top: 0, width: 4, height: ph, background: lineC } }),
-      /* @__PURE__ */ jsx87("div", { style: { ...flex6, position: "absolute", left: half - 34, top: ph / 2 - 34, width: 68, height: 68, borderRadius: 68, background: lineC, alignItems: "center", justifyContent: "center", boxShadow: "0 6px 18px rgba(0,0,0,0.35)" }, children: /* @__PURE__ */ jsx87("svg", { width: 40, height: 22, viewBox: "0 0 40 22", children: /* @__PURE__ */ jsx87("path", { d: "M12 3 L4 11 L12 19 M28 3 L36 11 L28 19", stroke: p.colour === 2 ? "#fff" : "#16130F", strokeWidth: 4, fill: "none", strokeLinecap: "round", strokeLinejoin: "round" }) }) })
+      /* @__PURE__ */ jsx88("div", { style: { ...flex6, position: "absolute", left: half - 2, top: 0, width: 4, height: ph, background: lineC } }),
+      /* @__PURE__ */ jsx88("div", { style: { ...flex6, position: "absolute", left: half - 34, top: ph / 2 - 34, width: 68, height: 68, borderRadius: 68, background: lineC, alignItems: "center", justifyContent: "center", boxShadow: "0 6px 18px rgba(0,0,0,0.35)" }, children: /* @__PURE__ */ jsx88("svg", { width: 40, height: 22, viewBox: "0 0 40 22", children: /* @__PURE__ */ jsx88("path", { d: "M12 3 L4 11 L12 19 M28 3 L36 11 L28 19", stroke: p.colour === 2 ? "#fff" : "#16130F", strokeWidth: 4, fill: "none", strokeLinecap: "round", strokeLinejoin: "round" }) }) })
     ] }),
-    sq && /* @__PURE__ */ jsx87("span", { style: { fontSize: 26, color: t.sub }, children: ratioLine(p) })
+    sq && /* @__PURE__ */ jsx88("span", { style: { fontSize: 26, color: t.sub }, children: ratioLine(p) })
   ] });
 }
 function NewspaperCard2(p, size, owner) {
-  let t = tmTheme(p.colour), { iw, sq, st } = dims5(size), paper = ["#E9DCBF", "#1B1925", "#FBF9F4"][p.colour] ?? "#E9DCBF", ink2 = ["#2A2018", "#EDE9E1", "#111111"][p.colour] ?? "#2A2018", soft = p.colour === 1 ? "rgba(237,233,225,0.66)" : "rgba(20,15,10,0.66)", shade = p.colour === 1 ? "rgba(255,255,255,0.06)" : "rgba(60,40,20,0.08)", rule = (hgt = 2) => /* @__PURE__ */ jsx87("div", { style: { ...flex6, height: hgt, background: ink2 } }), bfs = sq ? 19 : st ? 27 : 21, col5 = (txts) => /* @__PURE__ */ jsx87("div", { style: { ...flex6, flexDirection: "column", flex: 1, gap: 10 }, children: txts.map((x, k) => /* @__PURE__ */ jsx87("span", { style: { fontSize: bfs, lineHeight: 1.45, color: soft }, children: x }, k)) }), nf = 5, pd = sq ? 120 : st ? 148 : 132, inner = iw - (sq ? 68 : 80), left = [`${owner.name} (@${owner.handle}) closed the month on 1,240 followers. Sources describe the account as a Broadcaster: links out, threads in, 61 replies in four weeks.`], right = ["Neighbours say the posts are good but rarely answered. Asked whether this would change, the account posted a link, which observers called on brand."];
-  return st && (left.push("Forty-two posts went out this month. Most of them were read. Few of them were talked about."), right.push("Weather: high pressure over the replies, spreading slowly. Expect conversation by spring.")), /* @__PURE__ */ jsx87(Page, { size, t, owner, mark: p.mark, children: /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", width: iw, flex: 1, marginBottom: 30, background: paper, color: ink2, padding: sq ? "26px 34px" : "34px 40px", borderRadius: 6, boxShadow: "0 16px 36px rgba(0,0,0,0.3)", justifyContent: "space-between" }, children: [
-    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", gap: sq ? 10 : st ? 18 : 14 }, children: [
-      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, justifyContent: "space-between" }, children: [
-        /* @__PURE__ */ jsx87(Mono, { fs: st ? 20 : 16, c: soft, children: "ONE YEAR AGO TODAY" }),
-        /* @__PURE__ */ jsx87(Mono, { fs: st ? 20 : 16, c: soft, children: "X TIME MACHINE" })
+  let t = tmTheme(p.colour), { iw, sq, st } = dims5(size), paper = ["#E9DCBF", "#1B1925", "#FBF9F4"][p.colour] ?? "#E9DCBF", ink2 = ["#2A2018", "#EDE9E1", "#111111"][p.colour] ?? "#2A2018", soft = p.colour === 1 ? "rgba(237,233,225,0.66)" : "rgba(20,15,10,0.66)", shade = p.colour === 1 ? "rgba(255,255,255,0.06)" : "rgba(60,40,20,0.08)", rule = (hgt = 2) => /* @__PURE__ */ jsx88("div", { style: { ...flex6, height: hgt, background: ink2 } }), bfs = sq ? 19 : st ? 27 : 21, col5 = (txts) => /* @__PURE__ */ jsx88("div", { style: { ...flex6, flexDirection: "column", flex: 1, gap: 10 }, children: txts.map((x, k) => /* @__PURE__ */ jsx88("span", { style: { fontSize: bfs, lineHeight: 1.45, color: soft }, children: x }, k)) }), nf = 5, pd = sq ? 120 : st ? 148 : 132, inner = iw - (sq ? 68 : 80), left = [`${owner.name} (@${owner.handle}) closed the month on 1,240 followers. Sources describe the account as a Broadcaster: links out, threads in, 61 replies in four weeks.`], right = ["Neighbours say the posts are good but rarely answered. Asked whether this would change, the account posted a link, which observers called on brand."];
+  return st && (left.push("Forty-two posts went out this month. Most of them were read. Few of them were talked about."), right.push("Weather: high pressure over the replies, spreading slowly. Expect conversation by spring.")), /* @__PURE__ */ jsx88(Page, { size, t, owner, mark: p.mark, children: /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column", width: iw, flex: 1, marginBottom: 30, background: paper, color: ink2, padding: sq ? "26px 34px" : "34px 40px", borderRadius: 6, boxShadow: "0 16px 36px rgba(0,0,0,0.3)", justifyContent: "space-between" }, children: [
+    /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column", gap: sq ? 10 : st ? 18 : 14 }, children: [
+      /* @__PURE__ */ jsxs88("div", { style: { ...flex6, justifyContent: "space-between" }, children: [
+        /* @__PURE__ */ jsx88(Mono, { fs: st ? 20 : 16, c: soft, children: "ONE YEAR AGO TODAY" }),
+        /* @__PURE__ */ jsx88(Mono, { fs: st ? 20 : 16, c: soft, children: "X TIME MACHINE" })
       ] }),
-      /* @__PURE__ */ jsx87("div", { style: { ...flex6, justifyContent: "center" }, children: /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Heavy", fontWeight: 800, fontSize: sq ? 74 : st ? 84 : 86, lineHeight: 1, letterSpacing: -1 }, children: "The Timeline Times" }) }),
-      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", gap: 4 }, children: [
+      /* @__PURE__ */ jsx88("div", { style: { ...flex6, justifyContent: "center" }, children: /* @__PURE__ */ jsx88("span", { style: { fontFamily: "Heavy", fontWeight: 800, fontSize: sq ? 74 : st ? 84 : 86, lineHeight: 1, letterSpacing: -1 }, children: "The Timeline Times" }) }),
+      /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column", gap: 4 }, children: [
         rule(3),
         rule(1)
       ] }),
-      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, justifyContent: "space-between" }, children: [
-        /* @__PURE__ */ jsx87(Mono, { fs: st ? 20 : 16, children: "VOL. 7 \xB7 NO. 1,240" }),
-        /* @__PURE__ */ jsx87(Mono, { fs: st ? 20 : 16, children: "FRIDAY, 17 OCTOBER 2025" }),
-        /* @__PURE__ */ jsx87(Mono, { fs: st ? 20 : 16, children: "LATE EDITION" })
+      /* @__PURE__ */ jsxs88("div", { style: { ...flex6, justifyContent: "space-between" }, children: [
+        /* @__PURE__ */ jsx88(Mono, { fs: st ? 20 : 16, children: "VOL. 7 \xB7 NO. 1,240" }),
+        /* @__PURE__ */ jsx88(Mono, { fs: st ? 20 : 16, children: "FRIDAY, 17 OCTOBER 2025" }),
+        /* @__PURE__ */ jsx88(Mono, { fs: st ? 20 : 16, children: "LATE EDITION" })
       ] }),
       rule(1),
-      /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Display", fontWeight: 700, fontSize: sq ? 48 : st ? 72 : 60, lineHeight: 1.04, marginTop: 4 }, children: "Local account posts 42 times a month, replies to almost no one" })
+      /* @__PURE__ */ jsx88("span", { style: { fontFamily: "Display", fontWeight: 700, fontSize: sq ? 48 : st ? 72 : 60, lineHeight: 1.04, marginTop: 4 }, children: "Local account posts 42 times a month, replies to almost no one" })
     ] }),
-    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", gap: 8 }, children: [
-      /* @__PURE__ */ jsx87("div", { style: { ...flex6, justifyContent: "space-between", background: shade, padding: sq ? 14 : 18, width: inner }, children: p.then.slice(0, nf).map((x, k) => /* @__PURE__ */ jsx87(Face3, { per: x, d: pd, t: { ...t, card: paper }, then: !0 }, k)) }),
-      /* @__PURE__ */ jsx87("span", { style: { fontSize: st ? 20 : 16, color: soft, fontStyle: "italic" }, children: "Pictured: the regulars at the time. Most of them have since drifted off." })
+    /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column", gap: 8 }, children: [
+      /* @__PURE__ */ jsx88("div", { style: { ...flex6, justifyContent: "space-between", background: shade, padding: sq ? 14 : 18, width: inner }, children: p.then.slice(0, nf).map((x, k) => /* @__PURE__ */ jsx88(Face3, { per: x, d: pd, t: { ...t, card: paper }, then: !0 }, k)) }),
+      /* @__PURE__ */ jsx88("span", { style: { fontSize: st ? 20 : 16, color: soft, fontStyle: "italic" }, children: "Pictured: the regulars at the time. Most of them have since drifted off." })
     ] }),
-    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, gap: 28 }, children: [
+    /* @__PURE__ */ jsxs88("div", { style: { ...flex6, gap: 28 }, children: [
       col5(left),
-      /* @__PURE__ */ jsx87("div", { style: { ...flex6, width: 1, background: soft } }),
+      /* @__PURE__ */ jsx88("div", { style: { ...flex6, width: 1, background: soft } }),
       col5(right)
     ] }),
-    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, alignItems: "center", gap: 20, background: t.now, borderRadius: 10, padding: sq ? "14px 20px" : st ? "26px 28px" : "20px 24px", transform: "rotate(-1deg)" }, children: [
-      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", flex: 1 }, children: [
-        /* @__PURE__ */ jsx87(Mono, { fs: st ? 22 : 18, c: "#fff", w: 700, ls: 3, children: "STOP PRESS \xB7 OCT 2026" }),
-        /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Display", fontWeight: 700, fontSize: sq ? 28 : st ? 40 : 32, lineHeight: 1.1, color: "#fff" }, children: "Now 3,180 followers and 412 replies a month" })
+    /* @__PURE__ */ jsxs88("div", { style: { ...flex6, alignItems: "center", gap: 20, background: t.now, borderRadius: 10, padding: sq ? "14px 20px" : st ? "26px 28px" : "20px 24px", transform: "rotate(-1deg)" }, children: [
+      /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column", flex: 1 }, children: [
+        /* @__PURE__ */ jsx88(Mono, { fs: st ? 22 : 18, c: "#fff", w: 700, ls: 3, children: "STOP PRESS \xB7 OCT 2026" }),
+        /* @__PURE__ */ jsx88("span", { style: { fontFamily: "Display", fontWeight: 700, fontSize: sq ? 28 : st ? 40 : 32, lineHeight: 1.1, color: "#fff" }, children: "Now 3,180 followers and 412 replies a month" })
       ] }),
-      /* @__PURE__ */ jsx87(Faces, { ppl: p.now.slice(0, 3), d: sq ? 60 : st ? 84 : 70, gap: 8, t, then: !1 })
+      /* @__PURE__ */ jsx88(Faces, { ppl: p.now.slice(0, 3), d: sq ? 60 : st ? 84 : 70, gap: 8, t, then: !1 })
     ] })
   ] }) });
 }
@@ -14228,27 +14654,27 @@ var MILESTONES = [
 ];
 function RulerCard(p, size, owner) {
   let t = tmTheme(p.colour), { iw, sq, st } = dims5(size), items = sq ? MILESTONES.filter((_, k) => k !== 1 && k !== 5) : MILESTONES, rh = sq ? 640 : st ? 1340 : 900, rw = 120, pad3 = 30, L2 = rh - pad3 * 2, link = 70, fd = sq ? 64 : st ? 116 : 76, ruler = ["#D9B57A", "#2A2838", "#E2C48F"][p.colour] ?? "#D9B57A", tick = p.colour === 1 ? "#F4F1EC" : "#2A2018", slot = rh / items.length;
-  return /* @__PURE__ */ jsxs87(Page, { size, t, owner, mark: p.mark, children: [
-    /* @__PURE__ */ jsx87(Head, { t, kicker: "X TIME MACHINE \xB7 MEASURED", title: "A year, to scale", fs: sq ? 66 : 80 }),
-    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "relative", width: iw, height: rh }, children: [
-      /* @__PURE__ */ jsx87("div", { style: { ...flex6, position: "absolute", left: 0, top: 0, width: rw, height: rh, background: ruler, borderRadius: 10, boxShadow: "0 10px 24px rgba(0,0,0,0.25)" } }),
-      /* @__PURE__ */ jsxs87("svg", { width: iw, height: rh, viewBox: `0 0 ${iw} ${rh}`, style: { position: "absolute", left: 0, top: 0 }, children: [
+  return /* @__PURE__ */ jsxs88(Page, { size, t, owner, mark: p.mark, children: [
+    /* @__PURE__ */ jsx88(Head, { t, kicker: "X TIME MACHINE \xB7 MEASURED", title: "A year, to scale", fs: sq ? 66 : 80 }),
+    /* @__PURE__ */ jsxs88("div", { style: { ...flex6, position: "relative", width: iw, height: rh }, children: [
+      /* @__PURE__ */ jsx88("div", { style: { ...flex6, position: "absolute", left: 0, top: 0, width: rw, height: rh, background: ruler, borderRadius: 10, boxShadow: "0 10px 24px rgba(0,0,0,0.25)" } }),
+      /* @__PURE__ */ jsxs88("svg", { width: iw, height: rh, viewBox: `0 0 ${iw} ${rh}`, style: { position: "absolute", left: 0, top: 0 }, children: [
         Array.from({ length: 49 }, (_, k) => {
           let y = pad3 + k / 48 * L2, m = k % 4 === 0;
-          return /* @__PURE__ */ jsx87("line", { x1: rw, x2: rw - (m ? 46 : 22), y1: y, y2: y, stroke: tick, strokeWidth: m ? 3 : 1.5 }, k);
+          return /* @__PURE__ */ jsx88("line", { x1: rw, x2: rw - (m ? 46 : 22), y1: y, y2: y, stroke: tick, strokeWidth: m ? 3 : 1.5 }, k);
         }),
         items.map(([m], k) => {
           let y = pad3 + m / 12 * L2, y2 = slot * k + slot / 2;
-          return /* @__PURE__ */ jsx87("path", { d: `M${rw + 6} ${y} C${rw + link / 2} ${y} ${rw + link / 2} ${y2} ${rw + link} ${y2}`, stroke: t.accent, strokeWidth: 2.5, fill: "none" }, k);
+          return /* @__PURE__ */ jsx88("path", { d: `M${rw + 6} ${y} C${rw + link / 2} ${y} ${rw + link / 2} ${y2} ${rw + link} ${y2}`, stroke: t.accent, strokeWidth: 2.5, fill: "none" }, k);
         }),
-        items.map(([m], k) => /* @__PURE__ */ jsx87("circle", { cx: rw + 6, cy: pad3 + m / 12 * L2, r: 6, fill: t.accent }, `c${k}`))
+        items.map(([m], k) => /* @__PURE__ */ jsx88("circle", { cx: rw + 6, cy: pad3 + m / 12 * L2, r: 6, fill: t.accent }, `c${k}`))
       ] }),
-      Array.from({ length: 13 }, (_, k) => k).filter((k) => k % 3 === 0).map((k) => /* @__PURE__ */ jsx87("div", { style: { ...flex6, position: "absolute", left: 8, top: pad3 + k / 12 * L2 - 12, fontFamily: "Mono", fontSize: 18, color: tick }, children: ["OCT", "JAN", "APR", "JUL", "OCT"][k / 3] }, k)),
-      items.map(([, when2, what, who], k) => /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "absolute", left: rw + link + 14, top: slot * k + slot / 2 - fd / 2 - 4, width: iw - rw - link - 14, height: fd + 8, alignItems: "center", gap: 20 }, children: [
-        /* @__PURE__ */ jsx87(Face3, { per: who < 0 ? p.then[0] : p.now[who], d: fd, t, then: who < 0 }),
-        /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column" }, children: [
-          /* @__PURE__ */ jsx87(Mono, { fs: sq ? 18 : st ? 24 : 20, c: t.accent, ls: 2, children: when2 }),
-          /* @__PURE__ */ jsx87("span", { style: { fontSize: sq ? 26 : st ? 32 : 28, lineHeight: 1.15 }, children: what })
+      Array.from({ length: 13 }, (_, k) => k).filter((k) => k % 3 === 0).map((k) => /* @__PURE__ */ jsx88("div", { style: { ...flex6, position: "absolute", left: 8, top: pad3 + k / 12 * L2 - 12, fontFamily: "Mono", fontSize: 18, color: tick }, children: ["OCT", "JAN", "APR", "JUL", "OCT"][k / 3] }, k)),
+      items.map(([, when2, what, who], k) => /* @__PURE__ */ jsxs88("div", { style: { ...flex6, position: "absolute", left: rw + link + 14, top: slot * k + slot / 2 - fd / 2 - 4, width: iw - rw - link - 14, height: fd + 8, alignItems: "center", gap: 20 }, children: [
+        /* @__PURE__ */ jsx88(Face3, { per: who < 0 ? p.then[0] : p.now[who], d: fd, t, then: who < 0 }),
+        /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column" }, children: [
+          /* @__PURE__ */ jsx88(Mono, { fs: sq ? 18 : st ? 24 : 20, c: t.accent, ls: 2, children: when2 }),
+          /* @__PURE__ */ jsx88("span", { style: { fontSize: sq ? 26 : st ? 32 : 28, lineHeight: 1.15 }, children: what })
         ] })
       ] }, k))
     ] })
@@ -14267,34 +14693,34 @@ function CakeCard(p, size, owner) {
     }
     return `${d} Z`;
   }, sprinkles = Array.from({ length: 22 }, (_, i) => ({ x: t1.x + 20 + i * 97 % (t1.w - 40), y: t1y + 50 + i * 53 % (t1.h - 70), r: i * 37 % 180, c: candle[i % 3] })), cand = Array.from({ length: 7 }, (_, i) => t2.x + 30 + i * ((t2.w - 60) / 6));
-  return /* @__PURE__ */ jsxs87(Page, { size, t, owner, mark: p.mark, children: [
-    /* @__PURE__ */ jsx87(Head, { t, kicker: p.tm.joined ? `X-IVERSARY \xB7 JOINED ${p.tm.joined.month.toUpperCase()} ${p.tm.joined.year}` : "X-IVERSARY", title: !p.tm.joined || p.tm.joined.years < 1 ? "My first year on X" : `${plural(p.tm.joined.years, "year")} on X`, fs: sq ? 72 : 96 }),
-    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", alignItems: "center", gap: sq ? 10 : 24 }, children: [
-      /* @__PURE__ */ jsx87("div", { style: { ...flex6, position: "relative", width: iw, height: ch }, children: /* @__PURE__ */ jsxs87("svg", { width: cw, height: ch, viewBox: `0 0 ${cw} ${ch}`, style: { position: "absolute", left: x0, top: 0 }, children: [
-        /* @__PURE__ */ jsx87("ellipse", { cx: cw / 2, cy: plateY + 6, rx: cw / 2 - 4, ry: 20, fill: t.card }),
-        /* @__PURE__ */ jsx87("rect", { x: t1.x, y: t1y, width: t1.w, height: t1.h, rx: 14, fill: sponge }),
-        /* @__PURE__ */ jsx87("path", { d: drip(t1.x, t1y, t1.w), fill: icing }),
-        sprinkles.map((s, i) => /* @__PURE__ */ jsx87("rect", { x: s.x, y: s.y, width: 14, height: 4, rx: 2, fill: s.c, transform: `rotate(${s.r} ${s.x + 7} ${s.y + 2})` }, i)),
-        /* @__PURE__ */ jsx87("rect", { x: t2.x, y: t2y, width: t2.w, height: t2.h, rx: 12, fill: sponge }),
-        /* @__PURE__ */ jsx87("path", { d: drip(t2.x, t2y, t2.w), fill: icing }),
-        cand.map((cx, i) => /* @__PURE__ */ jsxs87("g", { children: [
-          /* @__PURE__ */ jsx87("rect", { x: cx - 7 * z, y: t2y - 70 * z, width: 14 * z, height: 70 * z, rx: 4 * z, fill: candle[i % 3] }),
-          /* @__PURE__ */ jsx87("path", { d: `M${cx - 7 * z} ${t2y - 52 * z} L${cx + 7 * z} ${t2y - 60 * z} M${cx - 7 * z} ${t2y - 30 * z} L${cx + 7 * z} ${t2y - 38 * z}`, stroke: "#fff", strokeOpacity: 0.6, strokeWidth: 3 * z }),
-          /* @__PURE__ */ jsx87("path", { d: `M${cx} ${t2y - 108 * z} C${cx + 12 * z} ${t2y - 92 * z} ${cx + 10 * z} ${t2y - 78 * z} ${cx} ${t2y - 76 * z} C${cx - 10 * z} ${t2y - 78 * z} ${cx - 12 * z} ${t2y - 92 * z} ${cx} ${t2y - 108 * z} Z`, fill: "#FFC53D" }),
-          /* @__PURE__ */ jsx87("path", { d: `M${cx} ${t2y - 96 * z} C${cx + 5 * z} ${t2y - 88 * z} ${cx + 4 * z} ${t2y - 82 * z} ${cx} ${t2y - 80 * z} C${cx - 4 * z} ${t2y - 82 * z} ${cx - 5 * z} ${t2y - 88 * z} ${cx} ${t2y - 96 * z} Z`, fill: "#FFF3C4" })
+  return /* @__PURE__ */ jsxs88(Page, { size, t, owner, mark: p.mark, children: [
+    /* @__PURE__ */ jsx88(Head, { t, kicker: p.tm.joined ? `X-IVERSARY \xB7 JOINED ${p.tm.joined.month.toUpperCase()} ${p.tm.joined.year}` : "X-IVERSARY", title: !p.tm.joined || p.tm.joined.years < 1 ? "My first year on X" : `${plural(p.tm.joined.years, "year")} on X`, fs: sq ? 72 : 96 }),
+    /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column", alignItems: "center", gap: sq ? 10 : 24 }, children: [
+      /* @__PURE__ */ jsx88("div", { style: { ...flex6, position: "relative", width: iw, height: ch }, children: /* @__PURE__ */ jsxs88("svg", { width: cw, height: ch, viewBox: `0 0 ${cw} ${ch}`, style: { position: "absolute", left: x0, top: 0 }, children: [
+        /* @__PURE__ */ jsx88("ellipse", { cx: cw / 2, cy: plateY + 6, rx: cw / 2 - 4, ry: 20, fill: t.card }),
+        /* @__PURE__ */ jsx88("rect", { x: t1.x, y: t1y, width: t1.w, height: t1.h, rx: 14, fill: sponge }),
+        /* @__PURE__ */ jsx88("path", { d: drip(t1.x, t1y, t1.w), fill: icing }),
+        sprinkles.map((s, i) => /* @__PURE__ */ jsx88("rect", { x: s.x, y: s.y, width: 14, height: 4, rx: 2, fill: s.c, transform: `rotate(${s.r} ${s.x + 7} ${s.y + 2})` }, i)),
+        /* @__PURE__ */ jsx88("rect", { x: t2.x, y: t2y, width: t2.w, height: t2.h, rx: 12, fill: sponge }),
+        /* @__PURE__ */ jsx88("path", { d: drip(t2.x, t2y, t2.w), fill: icing }),
+        cand.map((cx, i) => /* @__PURE__ */ jsxs88("g", { children: [
+          /* @__PURE__ */ jsx88("rect", { x: cx - 7 * z, y: t2y - 70 * z, width: 14 * z, height: 70 * z, rx: 4 * z, fill: candle[i % 3] }),
+          /* @__PURE__ */ jsx88("path", { d: `M${cx - 7 * z} ${t2y - 52 * z} L${cx + 7 * z} ${t2y - 60 * z} M${cx - 7 * z} ${t2y - 30 * z} L${cx + 7 * z} ${t2y - 38 * z}`, stroke: "#fff", strokeOpacity: 0.6, strokeWidth: 3 * z }),
+          /* @__PURE__ */ jsx88("path", { d: `M${cx} ${t2y - 108 * z} C${cx + 12 * z} ${t2y - 92 * z} ${cx + 10 * z} ${t2y - 78 * z} ${cx} ${t2y - 76 * z} C${cx - 10 * z} ${t2y - 78 * z} ${cx - 12 * z} ${t2y - 92 * z} ${cx} ${t2y - 108 * z} Z`, fill: "#FFC53D" }),
+          /* @__PURE__ */ jsx88("path", { d: `M${cx} ${t2y - 96 * z} C${cx + 5 * z} ${t2y - 88 * z} ${cx + 4 * z} ${t2y - 82 * z} ${cx} ${t2y - 80 * z} C${cx - 4 * z} ${t2y - 82 * z} ${cx - 5 * z} ${t2y - 88 * z} ${cx} ${t2y - 96 * z} Z`, fill: "#FFF3C4" })
         ] }, i))
       ] }) }),
-      (st ? [cakeTop(p), cakeMore(p)] : [cakeTop(p)]).map((row, ri) => /* @__PURE__ */ jsx87("div", { style: { ...flex6, gap: 16, width: iw, marginTop: ri ? 14 : 0 }, children: row.map(([v, l], k) => /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", flex: 1, borderTop: `3px solid ${candle[k]}`, paddingTop: 12 }, children: [
-        /* @__PURE__ */ jsx87(Mono, { fs: sq ? 40 : st ? 56 : 48, w: 700, children: v }),
-        /* @__PURE__ */ jsx87("span", { style: { fontSize: st ? 26 : 22, color: t.sub }, children: l })
+      (st ? [cakeTop(p), cakeMore(p)] : [cakeTop(p)]).map((row, ri) => /* @__PURE__ */ jsx88("div", { style: { ...flex6, gap: 16, width: iw, marginTop: ri ? 14 : 0 }, children: row.map(([v, l], k) => /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column", flex: 1, borderTop: `3px solid ${candle[k]}`, paddingTop: 12 }, children: [
+        /* @__PURE__ */ jsx88(Mono, { fs: sq ? 40 : st ? 56 : 48, w: 700, children: v }),
+        /* @__PURE__ */ jsx88("span", { style: { fontSize: st ? 26 : 22, color: t.sub }, children: l })
       ] }, k)) }, ri))
     ] }),
-    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, alignItems: "center", justifyContent: "space-between", background: t.card, borderRadius: 24, padding: sq ? "16px 24px" : "22px 28px" }, children: [
-      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column" }, children: [
-        /* @__PURE__ */ jsx87("span", { style: { fontSize: st ? 28 : 24, color: t.sub }, children: "At the party" }),
-        /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Display", fontWeight: 700, fontSize: sq ? 30 : st ? 42 : 36 }, children: `${plural(p.orbit, "person", "people")} in my orbit` })
+    /* @__PURE__ */ jsxs88("div", { style: { ...flex6, alignItems: "center", justifyContent: "space-between", background: t.card, borderRadius: 24, padding: sq ? "16px 24px" : "22px 28px" }, children: [
+      /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column" }, children: [
+        /* @__PURE__ */ jsx88("span", { style: { fontSize: st ? 28 : 24, color: t.sub }, children: "At the party" }),
+        /* @__PURE__ */ jsx88("span", { style: { fontFamily: "Display", fontWeight: 700, fontSize: sq ? 30 : st ? 42 : 36 }, children: `${plural(p.orbit, "person", "people")} in my orbit` })
       ] }),
-      /* @__PURE__ */ jsx87(Faces, { ppl: p.now.slice(0, 5), d: sq ? 64 : st ? 92 : 76, gap: 10, t, then: !1 })
+      /* @__PURE__ */ jsx88(Faces, { ppl: p.now.slice(0, 5), d: sq ? 64 : st ? 92 : 76, gap: 10, t, then: !1 })
     ] })
   ] });
 }
@@ -14303,45 +14729,45 @@ function PostcardCard2(p, size, owner) {
     let dots = [];
     for (let x = 15 / 2; x < w; x += 15) dots.push([x, 0], [x, h]);
     for (let y = 15 / 2; y < h; y += 15) dots.push([0, y], [w, y]);
-    return /* @__PURE__ */ jsx87("svg", { width: w, height: h, viewBox: `0 0 ${w} ${h}`, style: { position: "absolute", left: 0, top: 0 }, children: dots.map(([x, y], k) => /* @__PURE__ */ jsx87("circle", { cx: x, cy: y, r: 5, fill: bg }, k)) });
-  }, back = /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "relative", width: iw, height: bh, background: card2, borderRadius: 14, boxShadow: "0 16px 36px rgba(0,0,0,0.3)", padding: 34, transform: st ? "rotate(1.5deg)" : "rotate(-1deg)" }, children: [
-    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", width: iw * 0.56 - 34, paddingRight: 30, justifyContent: "space-between" }, children: [
-      /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Display", fontWeight: 500, fontSize: sq ? 34 : st ? 36 : 30, lineHeight: 1.4, color: ink2 }, children: "Hi future me. 1,240 followers, 42 posts a month, and I barely reply to anyone. I hope you talk to people more. Say hi to whoever you meet." }),
-      /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Display", fontWeight: 700, fontSize: 30, color: ink2 }, children: "Me, Oct 2025" })
+    return /* @__PURE__ */ jsx88("svg", { width: w, height: h, viewBox: `0 0 ${w} ${h}`, style: { position: "absolute", left: 0, top: 0 }, children: dots.map(([x, y], k) => /* @__PURE__ */ jsx88("circle", { cx: x, cy: y, r: 5, fill: bg }, k)) });
+  }, back = /* @__PURE__ */ jsxs88("div", { style: { ...flex6, position: "relative", width: iw, height: bh, background: card2, borderRadius: 14, boxShadow: "0 16px 36px rgba(0,0,0,0.3)", padding: 34, transform: st ? "rotate(1.5deg)" : "rotate(-1deg)" }, children: [
+    /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column", width: iw * 0.56 - 34, paddingRight: 30, justifyContent: "space-between" }, children: [
+      /* @__PURE__ */ jsx88("span", { style: { fontFamily: "Display", fontWeight: 500, fontSize: sq ? 34 : st ? 36 : 30, lineHeight: 1.4, color: ink2 }, children: "Hi future me. 1,240 followers, 42 posts a month, and I barely reply to anyone. I hope you talk to people more. Say hi to whoever you meet." }),
+      /* @__PURE__ */ jsx88("span", { style: { fontFamily: "Display", fontWeight: 700, fontSize: 30, color: ink2 }, children: "Me, Oct 2025" })
     ] }),
-    /* @__PURE__ */ jsx87("div", { style: { ...flex6, width: 2, background: soft, marginTop: 10, marginBottom: 10 } }),
-    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", flex: 1, paddingLeft: 30, justifyContent: "space-between" }, children: [
-      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, justifyContent: "flex-end", position: "relative" }, children: [
-        /* @__PURE__ */ jsxs87("svg", { width: 180, height: 120, viewBox: "0 0 180 120", style: { position: "absolute", left: 0, top: 50 }, children: [
-          /* @__PURE__ */ jsx87("circle", { cx: 70, cy: 60, r: 56, fill: "none", stroke: t.now, strokeOpacity: 0.7, strokeWidth: 3 }),
-          /* @__PURE__ */ jsx87("circle", { cx: 70, cy: 60, r: 46, fill: "none", stroke: t.now, strokeOpacity: 0.7, strokeWidth: 2 }),
-          [0, 1, 2, 3].map((k) => /* @__PURE__ */ jsx87("path", { d: `M124 ${30 + k * 18} q12 -8 24 0 t24 0`, stroke: t.now, strokeOpacity: 0.7, strokeWidth: 3, fill: "none" }, k))
+    /* @__PURE__ */ jsx88("div", { style: { ...flex6, width: 2, background: soft, marginTop: 10, marginBottom: 10 } }),
+    /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column", flex: 1, paddingLeft: 30, justifyContent: "space-between" }, children: [
+      /* @__PURE__ */ jsxs88("div", { style: { ...flex6, justifyContent: "flex-end", position: "relative" }, children: [
+        /* @__PURE__ */ jsxs88("svg", { width: 180, height: 120, viewBox: "0 0 180 120", style: { position: "absolute", left: 0, top: 50 }, children: [
+          /* @__PURE__ */ jsx88("circle", { cx: 70, cy: 60, r: 56, fill: "none", stroke: t.now, strokeOpacity: 0.7, strokeWidth: 3 }),
+          /* @__PURE__ */ jsx88("circle", { cx: 70, cy: 60, r: 46, fill: "none", stroke: t.now, strokeOpacity: 0.7, strokeWidth: 2 }),
+          [0, 1, 2, 3].map((k) => /* @__PURE__ */ jsx88("path", { d: `M124 ${30 + k * 18} q12 -8 24 0 t24 0`, stroke: t.now, strokeOpacity: 0.7, strokeWidth: 3, fill: "none" }, k))
         ] }),
-        /* @__PURE__ */ jsx87("div", { style: { ...flex6, position: "absolute", left: 26, top: 99, width: 88, justifyContent: "center", transform: "rotate(-12deg)" }, children: /* @__PURE__ */ jsx87(Mono, { fs: 14, c: t.now, w: 700, children: "OCT 2025" }) }),
-        /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "relative", width: stamp.w, height: stamp.h, background: "#fff", padding: 14 }, children: [
+        /* @__PURE__ */ jsx88("div", { style: { ...flex6, position: "absolute", left: 26, top: 99, width: 88, justifyContent: "center", transform: "rotate(-12deg)" }, children: /* @__PURE__ */ jsx88(Mono, { fs: 14, c: t.now, w: 700, children: "OCT 2025" }) }),
+        /* @__PURE__ */ jsxs88("div", { style: { ...flex6, position: "relative", width: stamp.w, height: stamp.h, background: "#fff", padding: 14 }, children: [
           perf(stamp.w, stamp.h, card2),
-          /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", width: stamp.w - 28, height: stamp.h - 28, background: ["#C8A97E", "#5B5F7A", "#B9A58C"][p.colour] ?? "#C8A97E", alignItems: "center", justifyContent: "center", gap: 6 }, children: [
-            owner.avatar ? faded(owner.avatar, 84, { ...t, card: "rgba(255,255,255,0.5)" }) : /* @__PURE__ */ jsx87("div", { style: { ...flex6, width: 84, height: 84 } }),
-            /* @__PURE__ */ jsx87(Mono, { fs: 14, c: "#fff", w: 700, children: "X \xB7 2025" })
+          /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column", width: stamp.w - 28, height: stamp.h - 28, background: ["#C8A97E", "#5B5F7A", "#B9A58C"][p.colour] ?? "#C8A97E", alignItems: "center", justifyContent: "center", gap: 6 }, children: [
+            owner.avatar ? faded(owner.avatar, 84, { ...t, card: "rgba(255,255,255,0.5)" }) : /* @__PURE__ */ jsx88("div", { style: { ...flex6, width: 84, height: 84 } }),
+            /* @__PURE__ */ jsx88(Mono, { fs: 14, c: "#fff", w: 700, children: "X \xB7 2025" })
           ] })
         ] })
       ] }),
-      /* @__PURE__ */ jsx87("div", { style: { ...flex6, flexDirection: "column", gap: 18 }, children: [`@${short(owner.handle, 16)}`, "Opened October 2026", "One year from now"].map((l, k) => /* @__PURE__ */ jsx87("div", { style: { ...flex6, borderBottom: `2px solid ${soft}`, paddingBottom: 6 }, children: /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Display", fontWeight: 500, fontSize: 24, color: ink2 }, children: l }) }, k)) })
+      /* @__PURE__ */ jsx88("div", { style: { ...flex6, flexDirection: "column", gap: 18 }, children: [`@${short(owner.handle, 16)}`, "Opened October 2026", "One year from now"].map((l, k) => /* @__PURE__ */ jsx88("div", { style: { ...flex6, borderBottom: `2px solid ${soft}`, paddingBottom: 6 }, children: /* @__PURE__ */ jsx88("span", { style: { fontFamily: "Display", fontWeight: 500, fontSize: 24, color: ink2 }, children: l }) }, k)) })
     ] })
-  ] }), fh = st ? 640 : 360, fd = st ? 140 : 96, front = /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", position: "relative", width: iw, height: fh, background: ["#B5803F", "#2C2A55", "#D9C7A7"][p.colour] ?? "#B5803F", borderRadius: 14, border: `14px solid ${card2}`, padding: 26, justifyContent: "space-between", boxShadow: "0 16px 36px rgba(0,0,0,0.3)", transform: "rotate(-1.5deg)" }, children: [
-    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column" }, children: [
-      /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Display", fontWeight: 500, fontSize: 30, color: "#fff" }, children: "Greetings from" }),
-      /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Heavy", fontWeight: 800, fontSize: st ? 220 : 130, lineHeight: 0.95, color: card2 }, children: "2025" })
+  ] }), fh = st ? 640 : 360, fd = st ? 140 : 96, front = /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column", position: "relative", width: iw, height: fh, background: ["#B5803F", "#2C2A55", "#D9C7A7"][p.colour] ?? "#B5803F", borderRadius: 14, border: `14px solid ${card2}`, padding: 26, justifyContent: "space-between", boxShadow: "0 16px 36px rgba(0,0,0,0.3)", transform: "rotate(-1.5deg)" }, children: [
+    /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column" }, children: [
+      /* @__PURE__ */ jsx88("span", { style: { fontFamily: "Display", fontWeight: 500, fontSize: 30, color: "#fff" }, children: "Greetings from" }),
+      /* @__PURE__ */ jsx88("span", { style: { fontFamily: "Heavy", fontWeight: 800, fontSize: st ? 220 : 130, lineHeight: 0.95, color: card2 }, children: "2025" })
     ] }),
-    /* @__PURE__ */ jsx87("div", { style: { ...flex6, flexWrap: "wrap", gap: 14, justifyContent: "flex-end" }, children: p.then.slice(0, st ? 10 : 6).map((x, k) => /* @__PURE__ */ jsx87(Face3, { per: x, d: fd, t: { ...t, card: card2 }, then: !0 }, k)) })
+    /* @__PURE__ */ jsx88("div", { style: { ...flex6, flexWrap: "wrap", gap: 14, justifyContent: "flex-end" }, children: p.then.slice(0, st ? 10 : 6).map((x, k) => /* @__PURE__ */ jsx88(Face3, { per: x, d: fd, t: { ...t, card: card2 }, then: !0 }, k)) })
   ] });
-  return /* @__PURE__ */ jsxs87(Page, { size, t, owner, mark: p.mark, children: [
-    /* @__PURE__ */ jsx87(Head, { t, kicker: "X TIME MACHINE \xB7 POSTCARD", title: "A postcard from last October", fs: 60 }),
-    sq ? back : /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", gap: st ? 70 : 30 }, children: [
+  return /* @__PURE__ */ jsxs88(Page, { size, t, owner, mark: p.mark, children: [
+    /* @__PURE__ */ jsx88(Head, { t, kicker: "X TIME MACHINE \xB7 POSTCARD", title: "A postcard from last October", fs: 60 }),
+    sq ? back : /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column", gap: st ? 70 : 30 }, children: [
       front,
       back
     ] }),
-    /* @__PURE__ */ jsx87("span", { style: { fontSize: st ? 32 : 26, color: t.sub }, children: st ? "Reply from now: 3,180 followers and 412 replies a month. We talk to people now." : "Reply from now: 3,180 followers, 412 replies a month." })
+    /* @__PURE__ */ jsx88("span", { style: { fontSize: st ? 32 : 26, color: t.sub }, children: st ? "Reply from now: 3,180 followers and 412 replies a month. We talk to people now." : "Reply from now: 3,180 followers, 412 replies a month." })
   ] });
 }
 function LetterCard(p, size, owner) {
@@ -14349,31 +14775,31 @@ function LetterCard(p, size, owner) {
     "You're on 1,240 followers and mostly posting into the void. That changes. By next autumn you'll reply 412 times a month, not 61, and somehow it'll be the best part of your day.",
     "You'll post 2,310 times this year. August will be your best month. You'll keep a 34-day streak and not even notice until day 30.",
     ...st ? ["Stop broadcasting. Start answering. The people below are worth it, and you haven't met most of them yet.", "Oh, and that thread in March? Post it. Don't overthink it."] : []
-  ], line2 = (r, children, extra = {}) => /* @__PURE__ */ jsx87("div", { style: { ...flex6, position: "absolute", left: padL, top: rowTop(r), width: iw - padL - padR, height: lh, alignItems: "flex-start", ...extra }, children }), txt = (s, w = 500) => /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Display", fontWeight: w, fontSize: fs, lineHeight: `${lh}px`, color: ink2 }, children: s });
-  return /* @__PURE__ */ jsx87(Page, { size, t, owner, mark: p.mark, children: /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "relative", width: iw, height: sheetH, background: paper, borderRadius: 8, boxShadow: "0 16px 36px rgba(0,0,0,0.3)" }, children: [
-    /* @__PURE__ */ jsxs87("svg", { width: iw, height: sheetH, viewBox: `0 0 ${iw} ${sheetH}`, style: { position: "absolute", left: 0, top: 0 }, children: [
-      Array.from({ length: rows }, (_, k) => /* @__PURE__ */ jsx87("line", { x1: 0, x2: iw, y1: rowTop(k + 1) - 8, y2: rowTop(k + 1) - 8, stroke: lineC, strokeWidth: 2 }, k)),
-      /* @__PURE__ */ jsx87("line", { x1: 70, x2: 70, y1: 0, y2: sheetH, stroke: "rgba(220,80,70,0.45)", strokeWidth: 2 })
+  ], line2 = (r, children, extra = {}) => /* @__PURE__ */ jsx88("div", { style: { ...flex6, position: "absolute", left: padL, top: rowTop(r), width: iw - padL - padR, height: lh, alignItems: "flex-start", ...extra }, children }), txt = (s, w = 500) => /* @__PURE__ */ jsx88("span", { style: { fontFamily: "Display", fontWeight: w, fontSize: fs, lineHeight: `${lh}px`, color: ink2 }, children: s });
+  return /* @__PURE__ */ jsx88(Page, { size, t, owner, mark: p.mark, children: /* @__PURE__ */ jsxs88("div", { style: { ...flex6, position: "relative", width: iw, height: sheetH, background: paper, borderRadius: 8, boxShadow: "0 16px 36px rgba(0,0,0,0.3)" }, children: [
+    /* @__PURE__ */ jsxs88("svg", { width: iw, height: sheetH, viewBox: `0 0 ${iw} ${sheetH}`, style: { position: "absolute", left: 0, top: 0 }, children: [
+      Array.from({ length: rows }, (_, k) => /* @__PURE__ */ jsx88("line", { x1: 0, x2: iw, y1: rowTop(k + 1) - 8, y2: rowTop(k + 1) - 8, stroke: lineC, strokeWidth: 2 }, k)),
+      /* @__PURE__ */ jsx88("line", { x1: 70, x2: 70, y1: 0, y2: sheetH, stroke: "rgba(220,80,70,0.45)", strokeWidth: 2 })
     ] }),
     line2(0, txt("Dear me, October 2025,", 700)),
-    line2(0, /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Display", fontWeight: 500, fontSize: Math.round(fs * 0.72), lineHeight: `${lh}px`, color: ink2, opacity: 0.55 }, children: "17 October 2026" }), { justifyContent: "flex-end" }),
-    /* @__PURE__ */ jsx87("div", { style: { ...flex6, flexDirection: "column", position: "absolute", left: padL, top: rowTop(2), width: iw - padL - padR }, children: paras.map((x, k) => /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Display", fontWeight: 500, fontSize: fs, lineHeight: `${lh}px`, color: ink2, marginBottom: lh }, children: x }, k)) }),
+    line2(0, /* @__PURE__ */ jsx88("span", { style: { fontFamily: "Display", fontWeight: 500, fontSize: Math.round(fs * 0.72), lineHeight: `${lh}px`, color: ink2, opacity: 0.55 }, children: "17 October 2026" }), { justifyContent: "flex-end" }),
+    /* @__PURE__ */ jsx88("div", { style: { ...flex6, flexDirection: "column", position: "absolute", left: padL, top: rowTop(2), width: iw - padL - padR }, children: paras.map((x, k) => /* @__PURE__ */ jsx88("span", { style: { fontFamily: "Display", fontWeight: 500, fontSize: fs, lineHeight: `${lh}px`, color: ink2, marginBottom: lh }, children: x }, k)) }),
     line2(rows - 2 - fr, txt("P.S. You'll meet these people:")),
-    /* @__PURE__ */ jsx87("div", { style: { ...flex6, position: "absolute", left: padL, top: rowTop(rows - 1 - fr) + (fr * lh - fd) / 2 - 4 }, children: /* @__PURE__ */ jsx87(Faces, { ppl: p.now.slice(0, 6), d: fd, gap: sq ? 14 : 18, t, then: !1 }) }),
+    /* @__PURE__ */ jsx88("div", { style: { ...flex6, position: "absolute", left: padL, top: rowTop(rows - 1 - fr) + (fr * lh - fd) / 2 - 4 }, children: /* @__PURE__ */ jsx88(Faces, { ppl: p.now.slice(0, 6), d: fd, gap: sq ? 14 : 18, t, then: !1 }) }),
     line2(rows - 1, txt("Love, me. October 2026", 700), { justifyContent: "flex-end" })
   ] }) });
 }
 var SeasonIcon = ({ k, c, s = 64 }) => {
   let m = s / 2;
-  return k === 0 ? /* @__PURE__ */ jsx87("svg", { width: s, height: s, viewBox: "0 0 64 64", children: [0, 60, 120].map((a) => /* @__PURE__ */ jsx87("g", { transform: `rotate(${a} 32 32)`, children: /* @__PURE__ */ jsx87("path", { d: "M32 4 V60 M24 10 L32 18 L40 10 M24 54 L32 46 L40 54", stroke: c, strokeWidth: 4, fill: "none", strokeLinecap: "round", strokeLinejoin: "round" }) }, a)) }) : k === 1 ? /* @__PURE__ */ jsxs87("svg", { width: s, height: s, viewBox: "0 0 64 64", children: [
-    [0, 72, 144, 216, 288].map((a) => /* @__PURE__ */ jsx87("ellipse", { cx: 32, cy: 16, rx: 9, ry: 14, fill: c, transform: `rotate(${a} 32 32)` }, a)),
-    /* @__PURE__ */ jsx87("circle", { cx: 32, cy: 32, r: 8, fill: "#FFE08A" })
-  ] }) : k === 2 ? /* @__PURE__ */ jsxs87("svg", { width: s, height: s, viewBox: "0 0 64 64", children: [
-    /* @__PURE__ */ jsx87("circle", { cx: 32, cy: 32, r: 13, fill: c }),
-    Array.from({ length: 8 }, (_, i) => /* @__PURE__ */ jsx87("path", { d: "M32 6 V13", stroke: c, strokeWidth: 5, strokeLinecap: "round", transform: `rotate(${i * 45} 32 32)` }, i))
-  ] }) : /* @__PURE__ */ jsxs87("svg", { width: s, height: s, viewBox: "0 0 64 64", children: [
-    /* @__PURE__ */ jsx87("path", { d: `M${m} 6 C54 16 58 40 ${m} 58 C6 40 10 16 ${m} 6 Z`, fill: c, transform: "rotate(35 32 32)" }),
-    /* @__PURE__ */ jsx87("path", { d: "M32 12 V58", stroke: "rgba(0,0,0,0.3)", strokeWidth: 3, transform: "rotate(35 32 32)" })
+  return k === 0 ? /* @__PURE__ */ jsx88("svg", { width: s, height: s, viewBox: "0 0 64 64", children: [0, 60, 120].map((a) => /* @__PURE__ */ jsx88("g", { transform: `rotate(${a} 32 32)`, children: /* @__PURE__ */ jsx88("path", { d: "M32 4 V60 M24 10 L32 18 L40 10 M24 54 L32 46 L40 54", stroke: c, strokeWidth: 4, fill: "none", strokeLinecap: "round", strokeLinejoin: "round" }) }, a)) }) : k === 1 ? /* @__PURE__ */ jsxs88("svg", { width: s, height: s, viewBox: "0 0 64 64", children: [
+    [0, 72, 144, 216, 288].map((a) => /* @__PURE__ */ jsx88("ellipse", { cx: 32, cy: 16, rx: 9, ry: 14, fill: c, transform: `rotate(${a} 32 32)` }, a)),
+    /* @__PURE__ */ jsx88("circle", { cx: 32, cy: 32, r: 8, fill: "#FFE08A" })
+  ] }) : k === 2 ? /* @__PURE__ */ jsxs88("svg", { width: s, height: s, viewBox: "0 0 64 64", children: [
+    /* @__PURE__ */ jsx88("circle", { cx: 32, cy: 32, r: 13, fill: c }),
+    Array.from({ length: 8 }, (_, i) => /* @__PURE__ */ jsx88("path", { d: "M32 6 V13", stroke: c, strokeWidth: 5, strokeLinecap: "round", transform: `rotate(${i * 45} 32 32)` }, i))
+  ] }) : /* @__PURE__ */ jsxs88("svg", { width: s, height: s, viewBox: "0 0 64 64", children: [
+    /* @__PURE__ */ jsx88("path", { d: `M${m} 6 C54 16 58 40 ${m} 58 C6 40 10 16 ${m} 6 Z`, fill: c, transform: "rotate(35 32 32)" }),
+    /* @__PURE__ */ jsx88("path", { d: "M32 12 V58", stroke: "rgba(0,0,0,0.3)", strokeWidth: 3, transform: "rotate(35 32 32)" })
   ] });
 };
 function SeasonsCard(p, size, owner) {
@@ -14383,43 +14809,43 @@ function SeasonsCard(p, size, owner) {
     ["SUMMER", "Jun \u2013 Aug", "2,540", "Best month: August. Past 2,000 followers.", !1],
     ["AUTUMN", "Sep \u2013 Oct", "3,180", "34-day streak. 412 replies a month.", !1]
   ], gap = 18, tw = st ? iw : (iw - gap) / 2, th = sq ? 300 : st ? 336 : 440, fd = sq ? 72 : st ? 120 : 92;
-  return /* @__PURE__ */ jsxs87(Page, { size, t, owner, mark: p.mark, children: [
-    /* @__PURE__ */ jsx87(Head, { t, kicker: "X TIME MACHINE \xB7 FOUR SEASONS", title: "A year in four seasons", fs: sq ? 64 : 80 }),
-    /* @__PURE__ */ jsx87("div", { style: { ...flex6, flexWrap: "wrap", gap, width: iw }, children: seasons.map(([name, months, f, note, then], k) => /* @__PURE__ */ jsxs87("div", { style: { ...flex6, position: "relative", flexDirection: "column", width: tw, height: th, background: `linear-gradient(160deg, ${rgba(tints[k], p.colour === 2 ? 0.22 : 0.3)} 0%, ${t.card} 70%)`, borderRadius: 26, padding: sq ? 24 : 30, justifyContent: "space-between", overflow: "hidden" }, children: [
-      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, justifyContent: "space-between", alignItems: "flex-start" }, children: [
-        /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column" }, children: [
-          /* @__PURE__ */ jsx87(Mono, { fs: sq ? 24 : st ? 30 : 26, c: tints[k], w: 700, ls: 3, children: name }),
-          /* @__PURE__ */ jsx87(Mono, { fs: sq ? 18 : 20, c: t.sub, children: months })
+  return /* @__PURE__ */ jsxs88(Page, { size, t, owner, mark: p.mark, children: [
+    /* @__PURE__ */ jsx88(Head, { t, kicker: "X TIME MACHINE \xB7 FOUR SEASONS", title: "A year in four seasons", fs: sq ? 64 : 80 }),
+    /* @__PURE__ */ jsx88("div", { style: { ...flex6, flexWrap: "wrap", gap, width: iw }, children: seasons.map(([name, months, f, note, then], k) => /* @__PURE__ */ jsxs88("div", { style: { ...flex6, position: "relative", flexDirection: "column", width: tw, height: th, background: `linear-gradient(160deg, ${rgba(tints[k], p.colour === 2 ? 0.22 : 0.3)} 0%, ${t.card} 70%)`, borderRadius: 26, padding: sq ? 24 : 30, justifyContent: "space-between", overflow: "hidden" }, children: [
+      /* @__PURE__ */ jsxs88("div", { style: { ...flex6, justifyContent: "space-between", alignItems: "flex-start" }, children: [
+        /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column" }, children: [
+          /* @__PURE__ */ jsx88(Mono, { fs: sq ? 24 : st ? 30 : 26, c: tints[k], w: 700, ls: 3, children: name }),
+          /* @__PURE__ */ jsx88(Mono, { fs: sq ? 18 : 20, c: t.sub, children: months })
         ] }),
-        /* @__PURE__ */ jsx87(SeasonIcon, { k, c: tints[k], s: sq ? 52 : st ? 72 : 64 })
+        /* @__PURE__ */ jsx88(SeasonIcon, { k, c: tints[k], s: sq ? 52 : st ? 72 : 64 })
       ] }),
-      /* @__PURE__ */ jsx87("span", { style: { fontSize: sq ? 21 : st ? 32 : 26, lineHeight: 1.3, color: t.ink, maxWidth: st ? 640 : tw - 60 }, children: note }),
-      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, alignItems: "flex-end", justifyContent: "space-between" }, children: [
-        /* @__PURE__ */ jsxs87("div", { style: { ...flex6, alignItems: "baseline", gap: 12 }, children: [
-          /* @__PURE__ */ jsx87(Mono, { fs: sq ? 42 : st ? 64 : 54, w: 700, children: f }),
-          /* @__PURE__ */ jsx87("span", { style: { fontSize: sq ? 18 : 22, color: t.sub }, children: "followers" })
+      /* @__PURE__ */ jsx88("span", { style: { fontSize: sq ? 21 : st ? 32 : 26, lineHeight: 1.3, color: t.ink, maxWidth: st ? 640 : tw - 60 }, children: note }),
+      /* @__PURE__ */ jsxs88("div", { style: { ...flex6, alignItems: "flex-end", justifyContent: "space-between" }, children: [
+        /* @__PURE__ */ jsxs88("div", { style: { ...flex6, alignItems: "baseline", gap: 12 }, children: [
+          /* @__PURE__ */ jsx88(Mono, { fs: sq ? 42 : st ? 64 : 54, w: 700, children: f }),
+          /* @__PURE__ */ jsx88("span", { style: { fontSize: sq ? 18 : 22, color: t.sub }, children: "followers" })
         ] }),
-        /* @__PURE__ */ jsx87(Face3, { per: then ? p.then[0] : p.now[k], d: fd, t, then })
+        /* @__PURE__ */ jsx88(Face3, { per: then ? p.then[0] : p.now[k], d: fd, t, then })
       ] })
     ] }, k)) }),
-    /* @__PURE__ */ jsx87("span", { style: { fontSize: sq ? 24 : 28, color: t.sub }, children: "Each face: who I talked with most that season." })
+    /* @__PURE__ */ jsx88("span", { style: { fontSize: sq ? 24 : 28, color: t.sub }, children: "Each face: who I talked with most that season." })
   ] });
 }
 function StaircaseCard(p, size, owner) {
   let t = tmTheme(p.colour), { iw, sq, st } = dims5(size), m = p.tm, from = m.followersFrom, len = m.months.length - 1 - from, at4 = [...new Set([0, 1, 2, 3].map((j) => from + Math.floor(j * len / 4)))].filter((k) => k < m.months.length - 1), steps = [...at4.map((k) => ({ v: m.months[k].followers ?? 0, label: mmyy(m.months[k].label), per: p.months[k] ?? null, then: k === at4[0] })), { v: m.followersNow, label: mmyy(m.nowLabel), per: p.now[0], then: !1 }], ah = sq ? 600 : st ? 1220 : 860, n = steps.length, sw = iw / n, fd = sq ? 96 : st ? 140 : 116, minB = sq ? 120 : 160, maxB = ah - fd - 30, lo = Math.min(...steps.map((x) => x.v)), hi = Math.max(...steps.map((x) => x.v)), height = (v) => hi > lo ? minB + (v - lo) / (hi - lo) * (maxB - minB) : (minB + maxB) / 2, shade = (k) => [`rgba(242,184,75,${0.18 + k * 0.17})`, `rgba(143,168,255,${0.18 + k * 0.17})`, `rgba(164,103,44,${0.14 + k * 0.15})`][p.colour] ?? t.card;
-  return /* @__PURE__ */ jsxs87(Page, { size, t, owner, mark: p.mark, children: [
-    /* @__PURE__ */ jsx87(Head, { t, kicker: "X TIME MACHINE \xB7 ONE STEP AT A TIME", title: `Climbing to ${num(m.followersNow)}`, fs: sq ? 66 : 84 }),
-    /* @__PURE__ */ jsx87("div", { style: { ...flex6, position: "relative", width: iw, height: ah }, children: steps.map((stp, k) => {
+  return /* @__PURE__ */ jsxs88(Page, { size, t, owner, mark: p.mark, children: [
+    /* @__PURE__ */ jsx88(Head, { t, kicker: "X TIME MACHINE \xB7 ONE STEP AT A TIME", title: `Climbing to ${num(m.followersNow)}`, fs: sq ? 66 : 84 }),
+    /* @__PURE__ */ jsx88("div", { style: { ...flex6, position: "relative", width: iw, height: ah }, children: steps.map((stp, k) => {
       let bh = height(stp.v), x = k * sw, y = ah - bh, light = p.colour !== 2 && k >= 3;
-      return /* @__PURE__ */ jsxs87("div", { style: { ...flex6 }, children: [
-        /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", position: "absolute", left: x, top: y, width: sw, height: bh, background: shade(k), borderTop: `5px solid ${k === n - 1 ? t.now : t.accent}`, padding: "16px 0 0 16px" }, children: [
-          /* @__PURE__ */ jsx87(Mono, { fs: sq ? 32 : st ? 40 : 36, w: 700, c: light ? "#16130F" : t.ink, children: num(stp.v) }),
-          /* @__PURE__ */ jsx87(Mono, { fs: 18, c: light ? "rgba(22,19,15,0.7)" : t.sub, children: stp.label })
+      return /* @__PURE__ */ jsxs88("div", { style: { ...flex6 }, children: [
+        /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column", position: "absolute", left: x, top: y, width: sw, height: bh, background: shade(k), borderTop: `5px solid ${k === n - 1 ? t.now : t.accent}`, padding: "16px 0 0 16px" }, children: [
+          /* @__PURE__ */ jsx88(Mono, { fs: sq ? 32 : st ? 40 : 36, w: 700, c: light ? "#16130F" : t.ink, children: num(stp.v) }),
+          /* @__PURE__ */ jsx88(Mono, { fs: 18, c: light ? "rgba(22,19,15,0.7)" : t.sub, children: stp.label })
         ] }),
-        /* @__PURE__ */ jsx87("div", { style: { ...flex6, position: "absolute", left: x + (sw - fd) / 2, top: y - fd - 14 }, children: monthFace(stp.per, fd, t, stp.then) })
+        /* @__PURE__ */ jsx88("div", { style: { ...flex6, position: "absolute", left: x + (sw - fd) / 2, top: y - fd - 14 }, children: monthFace(stp.per, fd, t, stp.then) })
       ] }, k);
     }) }),
-    /* @__PURE__ */ jsx87("span", { style: { fontSize: sq ? 26 : 30, color: t.sub, lineHeight: 1.35 }, children: `From ${num(steps[0].v)} to ${num(m.followersNow)} followers ${from === 0 ? "in a year" : `since ${m.months[from].label.toLowerCase().replace(/^\w/, (c) => c.toUpperCase())}`}. Each face: someone I talked with that month.` })
+    /* @__PURE__ */ jsx88("span", { style: { fontSize: sq ? 26 : 30, color: t.sub, lineHeight: 1.35 }, children: `From ${num(steps[0].v)} to ${num(m.followersNow)} followers ${from === 0 ? "in a year" : `since ${m.months[from].label.toLowerCase().replace(/^\w/, (c) => c.toUpperCase())}`}. Each face: someone I talked with that month.` })
   ] });
 }
 function FollowersCard(p, size, owner) {
@@ -14430,41 +14856,41 @@ function FollowersCard(p, size, owner) {
   ], gaps = ["6.5 years", "1 year"];
   if (sq) {
     let cw = (iw - 80) / 3;
-    return /* @__PURE__ */ jsxs87(Page, { size, t, owner, mark: p.mark, children: [
-      /* @__PURE__ */ jsx87(Head, { t, kicker: "X TIME MACHINE \xB7 FOLLOWERS", title: "Follower #1 to #3,180", fs: 72 }),
-      /* @__PURE__ */ jsx87("div", { style: { ...flex6, alignItems: "center", justifyContent: "space-between" }, children: items.map((it, k) => /* @__PURE__ */ jsxs87("div", { style: { ...flex6, alignItems: "center" }, children: [
-        /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", alignItems: "center", width: cw, background: t.card, borderRadius: 24, padding: "28px 12px", gap: 12 }, children: [
-          /* @__PURE__ */ jsx87(Mono, { fs: 36, w: 700, c: it.then ? t.accent : t.now, children: it.n }),
-          /* @__PURE__ */ jsx87(Face3, { per: it.who, d: 150, t, then: it.then }),
-          /* @__PURE__ */ jsx87("span", { style: { fontSize: 22, fontWeight: 700 }, children: `@${short(it.who.handle, 13)}` }),
-          /* @__PURE__ */ jsx87(Mono, { fs: 16, c: t.sub, children: it.when.toUpperCase() })
+    return /* @__PURE__ */ jsxs88(Page, { size, t, owner, mark: p.mark, children: [
+      /* @__PURE__ */ jsx88(Head, { t, kicker: "X TIME MACHINE \xB7 FOLLOWERS", title: "Follower #1 to #3,180", fs: 72 }),
+      /* @__PURE__ */ jsx88("div", { style: { ...flex6, alignItems: "center", justifyContent: "space-between" }, children: items.map((it, k) => /* @__PURE__ */ jsxs88("div", { style: { ...flex6, alignItems: "center" }, children: [
+        /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column", alignItems: "center", width: cw, background: t.card, borderRadius: 24, padding: "28px 12px", gap: 12 }, children: [
+          /* @__PURE__ */ jsx88(Mono, { fs: 36, w: 700, c: it.then ? t.accent : t.now, children: it.n }),
+          /* @__PURE__ */ jsx88(Face3, { per: it.who, d: 150, t, then: it.then }),
+          /* @__PURE__ */ jsx88("span", { style: { fontSize: 22, fontWeight: 700 }, children: `@${short(it.who.handle, 13)}` }),
+          /* @__PURE__ */ jsx88(Mono, { fs: 16, c: t.sub, children: it.when.toUpperCase() })
         ] }),
-        k < 2 && /* @__PURE__ */ jsx87("div", { style: { ...flex6, width: 40, justifyContent: "center" }, children: /* @__PURE__ */ jsx87(Arrow, { w: 32, h: 20, c: t.sub }) })
+        k < 2 && /* @__PURE__ */ jsx88("div", { style: { ...flex6, width: 40, justifyContent: "center" }, children: /* @__PURE__ */ jsx88(Arrow, { w: 32, h: 20, c: t.sub }) })
       ] }, k)) }),
-      /* @__PURE__ */ jsx87("div", { style: { ...flex6, gap: 20 }, children: [["6.5 years", "to reach #1,240"], ["1 year", "to add 1,940 more"]].map(([v, l], k) => /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", flex: 1, borderTop: `3px solid ${t.accent}`, paddingTop: 14 }, children: [
-        /* @__PURE__ */ jsx87(Mono, { fs: 40, w: 700, children: v }),
-        /* @__PURE__ */ jsx87("span", { style: { fontSize: 22, color: t.sub }, children: l })
+      /* @__PURE__ */ jsx88("div", { style: { ...flex6, gap: 20 }, children: [["6.5 years", "to reach #1,240"], ["1 year", "to add 1,940 more"]].map(([v, l], k) => /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column", flex: 1, borderTop: `3px solid ${t.accent}`, paddingTop: 14 }, children: [
+        /* @__PURE__ */ jsx88(Mono, { fs: 40, w: 700, children: v }),
+        /* @__PURE__ */ jsx88("span", { style: { fontSize: 22, color: t.sub }, children: l })
       ] }, k)) })
     ] });
   }
   let fd = st ? 200 : 150;
-  return /* @__PURE__ */ jsxs87(Page, { size, t, owner, mark: p.mark, children: [
-    /* @__PURE__ */ jsx87(Head, { t, kicker: "X TIME MACHINE \xB7 FOLLOWERS", title: "Follower #1 to #3,180", fs: st ? 80 : 76 }),
-    /* @__PURE__ */ jsx87("div", { style: { ...flex6, flexDirection: "column" }, children: items.map((it, k) => /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column" }, children: [
-      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, alignItems: "center", gap: 32, background: t.card, borderRadius: 28, padding: st ? 32 : 24 }, children: [
-        /* @__PURE__ */ jsx87(Face3, { per: it.who, d: fd, t, then: it.then }),
-        /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", gap: 4 }, children: [
-          /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Heavy", fontWeight: 800, fontSize: st ? 84 : 64, lineHeight: 1, color: it.then ? t.accent : t.now }, children: it.n }),
-          /* @__PURE__ */ jsx87("span", { style: { fontSize: st ? 34 : 28, fontWeight: 700 }, children: `@${short(it.who.handle, 22)}` }),
-          /* @__PURE__ */ jsx87(Mono, { fs: st ? 22 : 20, c: t.sub, children: `${it.when.toUpperCase()} \xB7 ${it.note.toUpperCase()}` })
+  return /* @__PURE__ */ jsxs88(Page, { size, t, owner, mark: p.mark, children: [
+    /* @__PURE__ */ jsx88(Head, { t, kicker: "X TIME MACHINE \xB7 FOLLOWERS", title: "Follower #1 to #3,180", fs: st ? 80 : 76 }),
+    /* @__PURE__ */ jsx88("div", { style: { ...flex6, flexDirection: "column" }, children: items.map((it, k) => /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column" }, children: [
+      /* @__PURE__ */ jsxs88("div", { style: { ...flex6, alignItems: "center", gap: 32, background: t.card, borderRadius: 28, padding: st ? 32 : 24 }, children: [
+        /* @__PURE__ */ jsx88(Face3, { per: it.who, d: fd, t, then: it.then }),
+        /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column", gap: 4 }, children: [
+          /* @__PURE__ */ jsx88("span", { style: { fontFamily: "Heavy", fontWeight: 800, fontSize: st ? 84 : 64, lineHeight: 1, color: it.then ? t.accent : t.now }, children: it.n }),
+          /* @__PURE__ */ jsx88("span", { style: { fontSize: st ? 34 : 28, fontWeight: 700 }, children: `@${short(it.who.handle, 22)}` }),
+          /* @__PURE__ */ jsx88(Mono, { fs: st ? 22 : 20, c: t.sub, children: `${it.when.toUpperCase()} \xB7 ${it.note.toUpperCase()}` })
         ] })
       ] }),
-      k < 2 && /* @__PURE__ */ jsxs87("div", { style: { ...flex6, alignItems: "center", gap: 20, padding: st ? "40px 0 40px 84px" : "16px 0 16px 56px" }, children: [
-        /* @__PURE__ */ jsx87(Arrow, { dir: "down", w: 34, h: st ? 110 : 56, c: t.sub }),
-        /* @__PURE__ */ jsx87(Mono, { fs: st ? 30 : 24, c: t.sub, children: `${gaps[k]} later` })
+      k < 2 && /* @__PURE__ */ jsxs88("div", { style: { ...flex6, alignItems: "center", gap: 20, padding: st ? "40px 0 40px 84px" : "16px 0 16px 56px" }, children: [
+        /* @__PURE__ */ jsx88(Arrow, { dir: "down", w: 34, h: st ? 110 : 56, c: t.sub }),
+        /* @__PURE__ */ jsx88(Mono, { fs: st ? 30 : 24, c: t.sub, children: `${gaps[k]} later` })
       ] })
     ] }, k)) }),
-    /* @__PURE__ */ jsx87("span", { style: { fontSize: st ? 32 : 28, color: t.sub }, children: "It took 6.5 years to reach 1,240 followers, and one more to add 1,940." })
+    /* @__PURE__ */ jsx88("span", { style: { fontSize: st ? 32 : 28, color: t.sub }, children: "It took 6.5 years to reach 1,240 followers, and one more to add 1,940." })
   ] });
 }
 var STAMPS = [
@@ -14482,23 +14908,23 @@ var STAMPS = [
 function PassportCard(p, size, owner) {
   let t = tmTheme(p.colour), { iw, sq, st } = dims5(size), page3 = ["#EADFC6", "#E6E9F2", "#FFFFFF"][p.colour] ?? "#EADFC6", ink2 = "#2A2018", inks = [["#A23B2A", "#2C5F8A", "#3F7A3A", "#7A3F8A"], ["#3A4FB8", "#C2361F", "#2F7A5A", "#6B3FA8"], ["#C2361F", "#16130F", "#2C5F8A", "#A4672C"]][p.colour] ?? ["#A23B2A", "#2C5F8A", "#3F7A3A", "#7A3F8A"], n = sq ? 4 : st ? 10 : 6, cols = 2, ph = sq ? 820 : st ? 1660 : 1090, idH = sq ? 220 : 260, cellW = (iw - 60) / cols, cellH = (ph - idH - 60 - 30) / (n / cols), sz = Math.min(cellW, cellH) - 30, rot = [-8, 6, -4, 9, -10, 5, 7, -6, -3, 8], stamp = (s, k) => {
     let c = inks[k % inks.length], [a, b, d, shape2] = s, w = shape2 === "circle" ? sz : shape2 === "oval" ? sz * 1.25 : sz * 1.15, h = shape2 === "circle" ? sz : sz * 0.78;
-    return /* @__PURE__ */ jsx87("div", { style: { ...flex6, width: cellW, height: cellH, alignItems: "center", justifyContent: "center" }, children: /* @__PURE__ */ jsx87("div", { style: { ...flex6, width: Math.min(w, cellW - 20), height: h, borderRadius: shape2 === "rect" ? 12 : 999, border: `5px solid ${c}`, padding: 6, transform: `translate(${[-24, 18, 26, -14, -6, 22, 14, -26, 20, -18][k]}px, ${[6, -8, 4, 10, -6, 4, -10, 6, -4, 8][k]}px) rotate(${rot[k]}deg)`, opacity: 0.85 }, children: /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", flex: 1, borderRadius: shape2 === "rect" ? 6 : 999, border: `2px ${shape2 === "rect" ? "dashed" : "solid"} ${c}`, alignItems: "center", justifyContent: "center", gap: 2 }, children: [
-      /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Heavy", fontWeight: 800, fontSize: a.length > 5 ? sz * 0.17 : sz * 0.22, color: c, lineHeight: 1 }, children: a }),
-      /* @__PURE__ */ jsx87(Mono, { fs: Math.round(sz * 0.085), c, w: 700, ls: 2, children: b }),
-      /* @__PURE__ */ jsx87(Mono, { fs: Math.round(sz * 0.075), c, children: d })
+    return /* @__PURE__ */ jsx88("div", { style: { ...flex6, width: cellW, height: cellH, alignItems: "center", justifyContent: "center" }, children: /* @__PURE__ */ jsx88("div", { style: { ...flex6, width: Math.min(w, cellW - 20), height: h, borderRadius: shape2 === "rect" ? 12 : 999, border: `5px solid ${c}`, padding: 6, transform: `translate(${[-24, 18, 26, -14, -6, 22, 14, -26, 20, -18][k]}px, ${[6, -8, 4, 10, -6, 4, -10, 6, -4, 8][k]}px) rotate(${rot[k]}deg)`, opacity: 0.85 }, children: /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column", flex: 1, borderRadius: shape2 === "rect" ? 6 : 999, border: `2px ${shape2 === "rect" ? "dashed" : "solid"} ${c}`, alignItems: "center", justifyContent: "center", gap: 2 }, children: [
+      /* @__PURE__ */ jsx88("span", { style: { fontFamily: "Heavy", fontWeight: 800, fontSize: a.length > 5 ? sz * 0.17 : sz * 0.22, color: c, lineHeight: 1 }, children: a }),
+      /* @__PURE__ */ jsx88(Mono, { fs: Math.round(sz * 0.085), c, w: 700, ls: 2, children: b }),
+      /* @__PURE__ */ jsx88(Mono, { fs: Math.round(sz * 0.075), c, children: d })
     ] }) }) });
   };
-  return /* @__PURE__ */ jsx87(Page, { size, t, owner, mark: p.mark, children: /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", position: "relative", width: iw, height: ph, background: page3, borderRadius: 20, padding: 30, boxShadow: "0 16px 36px rgba(0,0,0,0.3)", overflow: "hidden" }, children: [
-    /* @__PURE__ */ jsx87("svg", { width: iw, height: ph, viewBox: `0 0 ${iw} ${ph}`, style: { position: "absolute", left: 0, top: 0 }, children: Array.from({ length: Math.ceil(ph / 26) }, (_, k) => /* @__PURE__ */ jsx87("path", { d: `M0 ${k * 26} q ${iw / 8} -12 ${iw / 4} 0 t ${iw / 4} 0 t ${iw / 4} 0 t ${iw / 4} 0`, stroke: inks[1], strokeOpacity: 0.07, strokeWidth: 1.5, fill: "none" }, k)) }),
-    /* @__PURE__ */ jsxs87("div", { style: { ...flex6, alignItems: "center", gap: 28, height: idH, borderBottom: "2px dashed rgba(42,32,24,0.35)", paddingBottom: 26 }, children: [
-      /* @__PURE__ */ jsx87("div", { style: { ...flex6, width: 150, height: 180, borderRadius: 10, overflow: "hidden", background: "#C8A97E", border: "4px solid #fff" }, children: owner.avatar && photo(owner.avatar, 0, 0, 142, 172, 0, { position: "relative", opacity: 0.75 }) }),
-      /* @__PURE__ */ jsxs87("div", { style: { ...flex6, flexDirection: "column", gap: 6, flex: 1 }, children: [
-        /* @__PURE__ */ jsx87(Mono, { fs: 18, c: "rgba(42,32,24,0.6)", ls: 4, children: "PASSPORT \xB7 X TIME MACHINE" }),
-        /* @__PURE__ */ jsx87("span", { style: { fontFamily: "Display", fontWeight: 700, fontSize: sq ? 44 : 52, color: ink2, lineHeight: 1.05 }, children: "Where my X went this year" }),
-        /* @__PURE__ */ jsx87(Mono, { fs: 20, c: "rgba(42,32,24,0.7)", children: `@${short(owner.handle, 18)} \xB7 HOLDER SINCE MAR 2019` })
+  return /* @__PURE__ */ jsx88(Page, { size, t, owner, mark: p.mark, children: /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column", position: "relative", width: iw, height: ph, background: page3, borderRadius: 20, padding: 30, boxShadow: "0 16px 36px rgba(0,0,0,0.3)", overflow: "hidden" }, children: [
+    /* @__PURE__ */ jsx88("svg", { width: iw, height: ph, viewBox: `0 0 ${iw} ${ph}`, style: { position: "absolute", left: 0, top: 0 }, children: Array.from({ length: Math.ceil(ph / 26) }, (_, k) => /* @__PURE__ */ jsx88("path", { d: `M0 ${k * 26} q ${iw / 8} -12 ${iw / 4} 0 t ${iw / 4} 0 t ${iw / 4} 0 t ${iw / 4} 0`, stroke: inks[1], strokeOpacity: 0.07, strokeWidth: 1.5, fill: "none" }, k)) }),
+    /* @__PURE__ */ jsxs88("div", { style: { ...flex6, alignItems: "center", gap: 28, height: idH, borderBottom: "2px dashed rgba(42,32,24,0.35)", paddingBottom: 26 }, children: [
+      /* @__PURE__ */ jsx88("div", { style: { ...flex6, width: 150, height: 180, borderRadius: 10, overflow: "hidden", background: "#C8A97E", border: "4px solid #fff" }, children: owner.avatar && photo(owner.avatar, 0, 0, 142, 172, 0, { position: "relative", opacity: 0.75 }) }),
+      /* @__PURE__ */ jsxs88("div", { style: { ...flex6, flexDirection: "column", gap: 6, flex: 1 }, children: [
+        /* @__PURE__ */ jsx88(Mono, { fs: 18, c: "rgba(42,32,24,0.6)", ls: 4, children: "PASSPORT \xB7 X TIME MACHINE" }),
+        /* @__PURE__ */ jsx88("span", { style: { fontFamily: "Display", fontWeight: 700, fontSize: sq ? 44 : 52, color: ink2, lineHeight: 1.05 }, children: "Where my X went this year" }),
+        /* @__PURE__ */ jsx88(Mono, { fs: 20, c: "rgba(42,32,24,0.7)", children: `@${short(owner.handle, 18)} \xB7 HOLDER SINCE MAR 2019` })
       ] })
     ] }),
-    /* @__PURE__ */ jsx87("div", { style: { ...flex6, flexWrap: "wrap", width: iw - 60, marginTop: 30 }, children: STAMPS.slice(0, n).map((s, k) => /* @__PURE__ */ jsx87("div", { style: { ...flex6 }, children: stamp(s, k) }, k)) })
+    /* @__PURE__ */ jsx88("div", { style: { ...flex6, flexWrap: "wrap", width: iw - 60, marginTop: 30 }, children: STAMPS.slice(0, n).map((s, k) => /* @__PURE__ */ jsx88("div", { style: { ...flex6 }, children: stamp(s, k) }, k)) })
   ] }) });
 }
 var STORY = "This design tells a written story only the demo account backs up. Real reads get the other Time Machine designs.", TM2_CARDS = [
@@ -14533,7 +14959,7 @@ var SETS = [
 function allCards() {
   if (all) return all;
   let ours = [];
-  for (let mod of [intro_exports, misc2_exports, more_cards_exports, new_cards_exports, posts_exports, rings2_exports, shout2_exports, social_cards_exports, tm2_exports, unboxed_exports, halloween_exports, memes_exports])
+  for (let mod of [intro_exports, misc2_exports, more_cards_exports, mosaic_exports, new_cards_exports, posts_exports, rings2_exports, shout2_exports, social_cards_exports, tm2_exports, unboxed_exports, halloween_exports, memes_exports])
     for (let [k, v] of Object.entries(mod)) k.endsWith("_CARDS") && Array.isArray(v) && ours.push(...v);
   return all = [...catalog().map((c) => {
     let mode2 = portraitModeFor(c);
@@ -15317,15 +15743,27 @@ async function fxTimeline(handle, maxPages, since, fetcher2) {
   }
   return all2.sort((a, b) => (b.created_timestamp ?? 0) - (a.created_timestamp ?? 0)), { results: all2, more };
 }
-async function fxFollowers(handle, fetcher2) {
-  let last = { error: { status: 404 } };
-  for (let i = 0; i < 5; i++) {
-    i && await wait(300 * i);
-    let r = await fxGet(`/2/profile/${encodeURIComponent(handle)}/followers`, fetcher2);
-    if (!isFxError(r)) return { results: (Array.isArray(r.results) ? r.results : []).filter((u) => u && u.id && u.screen_name) };
-    if (last = r, r.error.status !== 404) break;
+async function fxFollowers(handle, fetcher2, maxFollowers = 70, onPage) {
+  let all2 = [], seen = /* @__PURE__ */ new Set(), cursor = "", maxPages = maxFollowers <= 70 ? 1 : Math.ceil(maxFollowers / 40) + 4;
+  for (let page3 = 0; page3 < maxPages && !(page3 > 0 && all2.length >= maxFollowers); page3++) {
+    let last = { error: { status: 404 } }, r = last;
+    for (let i = 0; i < 7; i++) {
+      i && await wait(250 * i);
+      let url = `/2/profile/${encodeURIComponent(handle)}/followers${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`;
+      if (r = await fxGet(url, fetcher2), !isFxError(r) || (last = r, r.error.status !== 404)) break;
+    }
+    if (isFxError(r)) {
+      if (page3 === 0) return last;
+      break;
+    }
+    let list2 = (Array.isArray(r.results) ? r.results : []).filter((u) => u && u.id && u.screen_name), added = 0;
+    for (let u of list2) {
+      let id = String(u.id);
+      seen.has(id) || (seen.add(id), all2.push(u), added++);
+    }
+    if (onPage?.(Math.min(all2.length, maxFollowers), maxFollowers, page3 + 1), cursor = String(r.cursor?.bottom ?? ""), !cursor || added === 0 || all2.length >= maxFollowers) break;
   }
-  return last;
+  return { results: all2.slice(0, maxFollowers) };
 }
 async function pool(items, n, fn) {
   let out = new Array(items.length), next = 0, worker = async () => {
@@ -15335,23 +15773,6 @@ async function pool(items, n, fn) {
     }
   };
   return await Promise.all(Array.from({ length: Math.min(n, items.length) }, worker)), out;
-}
-
-// src/lib/snapshot/tz.ts
-function usableTz(tz) {
-  if (typeof tz != "string" || !tz.trim() || tz.length > 64) return null;
-  try {
-    return new Intl.DateTimeFormat("en-US", { timeZone: tz.trim() }).resolvedOptions().timeZone;
-  } catch {
-    return null;
-  }
-}
-function browserTz() {
-  try {
-    return usableTz(Intl.DateTimeFormat().resolvedOptions().timeZone);
-  } catch {
-    return null;
-  }
 }
 
 // src/lib/fx/adapt.ts
@@ -15454,6 +15875,23 @@ function fillUsers(pages, full2) {
       let f = full2.get(u.username.toLowerCase());
       return f ? { ...f, id: u.id } : u;
     });
+}
+
+// src/lib/snapshot/tz.ts
+function usableTz(tz) {
+  if (typeof tz != "string" || !tz.trim() || tz.length > 64) return null;
+  try {
+    return new Intl.DateTimeFormat("en-US", { timeZone: tz.trim() }).resolvedOptions().timeZone;
+  } catch {
+    return null;
+  }
+}
+function browserTz() {
+  try {
+    return usableTz(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  } catch {
+    return null;
+  }
 }
 
 // src/lib/fx/snapshot-core.js
@@ -15773,7 +16211,7 @@ async function readHandle(handle, o = {}) {
     if (tick("posts"), !ok.length) return parts2[0];
     let seen = /* @__PURE__ */ new Set(), results = ok.flatMap((r) => r.results).filter((t) => !seen.has(t.id) && !!seen.add(t.id));
     return results.sort((a, b) => (b.created_timestamp ?? 0) - (a.created_timestamp ?? 0)), { results, more: ok.some((r) => r.more) || ok.length < parts2.length };
-  }), mentionsP = search(`@${h0} -from:${h0} since:${day(since)} until:${tomorrow}`, o.light ? 3 : MENTION_PAGES).then((r) => (tick("mentions"), r)), followersP = o.light ? Promise.resolve({ error: { status: 0 } }) : fxFollowers(h0, f).then((r) => (tick("followers"), isFxError(r) ? r : { data: r.results.map(toXUser) })), windows = monthWindows(now), historyP = o.light ? Promise.resolve([]) : pool(windows, 4, (w) => searchDown() ? Promise.resolve(fail) : search(`from:${h0} since:${w.start.slice(0, 10)} until:${day(Date.parse(w.end) + (w.end.slice(11, 19) === "00:00:00" ? 0 : DAY5))}`, 1)).then((r) => (tick("history"), r)), yearAgoP = o.light ? Promise.resolve(fail) : search(`from:${h0} since:${day(yearAgo - 3 * DAY5)} until:${day(yearAgo + 4 * DAY5)}`, 2), prof = await profP;
+  }), mentionsP = search(`@${h0} -from:${h0} since:${day(since)} until:${tomorrow}`, o.light ? 3 : MENTION_PAGES).then((r) => (tick("mentions"), r)), followersP = o.light ? Promise.resolve({ error: { status: 0 } }) : fxFollowers(h0, f, o.maxFollowers ?? 70).then((r) => (tick("followers"), isFxError(r) ? r : { data: r.results.map(toXUser) })), windows = monthWindows(now), historyP = o.light ? Promise.resolve([]) : pool(windows, 4, (w) => searchDown() ? Promise.resolve(fail) : search(`from:${h0} since:${w.start.slice(0, 10)} until:${day(Date.parse(w.end) + (w.end.slice(11, 19) === "00:00:00" ? 0 : DAY5))}`, 1)).then((r) => (tick("history"), r)), yearAgoP = o.light ? Promise.resolve(fail) : search(`from:${h0} since:${day(yearAgo - 3 * DAY5)} until:${day(yearAgo + 4 * DAY5)}`, 2), prof = await profP;
   if (isFxError(prof))
     throw prof.error.status === 404 ? new ReadFailed(`We couldn't find @${handle} on X. Check the spelling.`, "not-found") : new ReadFailed("X isn't answering right now. Try again in a minute.", "unavailable");
   let user = prof.user;
@@ -15836,6 +16274,14 @@ async function readPost(id, o = {}) {
 }
 
 // scripts/skill-cli.mts
+setAvatarSampler((dataUri) => {
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12"><image href="${dataUri}" width="12" height="12" preserveAspectRatio="xMidYMid slice"/></svg>`, px2 = new Resvg(svg).render().pixels;
+  if (!px2.length) return null;
+  let r = 0, g = 0, b = 0, n = 0;
+  for (let i = 0; i + 3 < px2.length; i += 4)
+    px2[i + 3] > 128 && (r += px2[i], g += px2[i + 1], b += px2[i + 2], n++);
+  return n ? [Math.round(r / n), Math.round(g / n), Math.round(b / n)] : null;
+});
 var CACHE_TTL_MS = 1440 * 60 * 1e3, ALLOWED_AVATAR_HOSTS = /* @__PURE__ */ new Set(["pbs.twimg.com", "abs.twimg.com"]), SCRIPT_DIR = import.meta.dirname, FONT_DIRS = [
   path.join(SCRIPT_DIR, "fonts"),
   path.resolve(SCRIPT_DIR, "..", "static", "fonts")
@@ -15903,6 +16349,7 @@ async function fetchSnapshot(handle, opts = {}) {
   let h = cleanHandle2(handle), snap = await readHandle(h, {
     fetcher: realFetch,
     light: opts.fast,
+    maxFollowers: opts.maxFollowers,
     onProgress: (p) => {
       p.step !== "done" && console.error(`  [${p.done}/${p.total}] ${p.label}...`);
     }
@@ -15911,6 +16358,35 @@ async function fetchSnapshot(handle, opts = {}) {
   let checked = validateSnapshot(snap);
   if (!checked.ok) throw new Error(`Invalid snapshot produced: ${checked.error}`);
   return checked.snapshot;
+}
+function parseFollowersLimit(raw, ownerFollowers = 2500) {
+  if (!raw) return;
+  if (raw.trim().toLowerCase() === "all") return Math.max(70, ownerFollowers);
+  let n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : void 0;
+}
+async function topUpFollowers(snap, targetCount, explicit, cachePath) {
+  let want = Math.min(targetCount, Math.max(snap.owner.followers, 70)), threshold = explicit ? want * 0.9 : Math.min(want * 0.85, 500);
+  if (snap.followers.length >= threshold) return snap;
+  console.error(`  Fetching up to ${want} followers for @${snap.owner.handle} (have ${snap.followers.length})...`);
+  let res = await fxFollowers(snap.owner.handle, realFetch, want, (loaded, target, page3) => {
+    console.error(`    page ${page3}: ${loaded} / ${target} followers`);
+  });
+  if (isFxError(res) || !res.results.length) return snap;
+  let byId = new Map(snap.followers.map((u) => [u.id, u]));
+  for (let raw of res.results) {
+    let x = toXUser(raw);
+    byId.has(x.id) || byId.set(x.id, {
+      id: x.id,
+      handle: x.username,
+      name: x.name,
+      avatar: x.profile_image_url ?? null,
+      followers: x.public_metrics?.followers_count ?? 0,
+      verified: !!x.verified
+    });
+  }
+  let updated = { ...snap, followers: [...byId.values()] };
+  return cachePath && (await mkdir(path.dirname(cachePath), { recursive: !0 }), await writeFile(cachePath, JSON.stringify(updated))), console.error(`  Loaded ${updated.followers.length} followers.`), updated;
 }
 async function loadOrFetchSnapshot(opts) {
   if (opts.snapshot) {
@@ -15934,12 +16410,12 @@ async function loadOrFetchSnapshot(opts) {
       if (Date.now() - st.mtimeMs < CACHE_TTL_MS) {
         let raw = JSON.parse(await readFile(cached, "utf8")), checked = validateSnapshot(raw);
         if (checked.ok)
-          return console.error(`Using cached snapshot for @${h} (${cached})`), { snap: checked.snapshot, source: cached };
+          return console.error(`Using cached snapshot for @${h} (${cached})`), { snap: checked.snapshot, source: cached, cachePath: cached };
       }
     } catch {
     }
-  let snap = await fetchSnapshot(h, { tz: opts.tz, fast: opts.fast });
-  return await mkdir(path.dirname(cached), { recursive: !0 }), await writeFile(cached, JSON.stringify(snap)), console.error(`Saved snapshot to ${cached}`), { snap, source: cached };
+  let snap = await fetchSnapshot(h, { tz: opts.tz, fast: opts.fast, maxFollowers: opts.maxFollowers });
+  return await mkdir(path.dirname(cached), { recursive: !0 }), await writeFile(cached, JSON.stringify(snap)), console.error(`Saved snapshot to ${cached}`), { snap, source: cached, cachePath: cached };
 }
 function summarizeSnapshot(snap, source) {
   let counts = /* @__PURE__ */ new Map();
@@ -16026,7 +16502,8 @@ Render options:
   --person <@handle>    Target person for shout-out cards
   --title <text>        Override card title
   --subtitle <text>     Override card subtitle
-  --line <text>         Custom line for text-led designs
+  --line, --text <text> Custom text for text-led designs & follower mosaic (e.g. "2000", "THANK YOU")
+  --followers <n|all>   Max followers to fetch for mosaic cards (default: 600 for thanks-mosaic, or "all")
   --date <YYYY-MM-DD>   Launch date for countdown designs
   --ring-text <text>    Custom text for profile rings
   --full-circle         Wrap ring text all the way around
@@ -16053,12 +16530,13 @@ async function cmdFetch(argv) {
     options: {
       out: { type: "string" },
       fast: { type: "boolean", default: !1 },
+      followers: { type: "string" },
       tz: { type: "string" },
       json: { type: "boolean", default: !1 }
     }
   }), handle = positionals[0];
-  if (!handle) throw new Error("Usage: orbit-cards fetch <@handle> [--out file.json] [--fast]");
-  let snap = await fetchSnapshot(handle, { tz: values.tz, fast: values.fast }), outPath = values.out ? path.resolve(values.out) : cachePathFor(handle);
+  if (!handle) throw new Error("Usage: orbit-cards fetch <@handle> [--out file.json] [--fast] [--followers 600|all]");
+  let maxFollowers = parseFollowersLimit(values.followers), snap = await fetchSnapshot(handle, { tz: values.tz, fast: values.fast, maxFollowers }), outPath = values.out ? path.resolve(values.out) : cachePathFor(handle);
   await mkdir(path.dirname(outPath), { recursive: !0 }), await writeFile(outPath, JSON.stringify(snap));
   let summary = summarizeSnapshot(snap, outPath);
   values.json ? console.log(JSON.stringify(summary, null, 2)) : (console.log(`Fetched @${summary.owner.handle} (${summary.owner.followers.toLocaleString()} followers)`), console.log(`  Posts: ${summary.counts.posts} \xB7 Mentions: ${summary.counts.mentions} \xB7 People: ${summary.counts.people} \xB7 Followers sampled: ${summary.counts.followers}`), summary.missing.length && console.log(`  Missing parts: ${summary.missing.join(", ")}`), summary.topPeople.length && console.log(`  Top orbit: ${summary.topPeople.slice(0, 6).map((p) => `@${p.handle}`).join(", ")}`), console.log(`  Saved: ${outPath}`));
@@ -16145,6 +16623,8 @@ async function cmdRender(argv) {
       title: { type: "string" },
       subtitle: { type: "string" },
       line: { type: "string" },
+      text: { type: "string" },
+      followers: { type: "string" },
       date: { type: "string" },
       "ring-text": { type: "string" },
       "full-circle": { type: "boolean", default: !1 },
@@ -16168,15 +16648,16 @@ async function cmdRender(argv) {
       exclude: { type: "string" },
       json: { type: "boolean", default: !1 }
     }
-  }), { snap } = await loadOrFetchSnapshot({
+  }), wantsMosaic = (values.card?.some((c) => c.includes("thanks-mosaic")) ?? !1) || values.set === "thanks", initialMaxFollowers = values.followers ? parseFollowersLimit(values.followers) : wantsMosaic ? 600 : void 0, { snap, cachePath } = await loadOrFetchSnapshot({
     handle: values.handle,
     postUrl: values["post-url"],
     snapshot: values.snapshot,
     refresh: values.refresh,
     fast: values.fast,
-    tz: values.tz
-  });
-  setCardData(snap);
+    tz: values.tz,
+    maxFollowers: initialMaxFollowers
+  }), targetFollowers = values.followers ? parseFollowersLimit(values.followers, snap.owner.followers) : wantsMosaic ? 600 : void 0;
+  (wantsMosaic || values.followers) && !values.snapshot && !values.postUrl && targetFollowers && (snap = await topUpFollowers(snap, targetFollowers, !!values.followers, cachePath)), setCardData(snap);
   let colour = Number(values.look ?? values.colour ?? 0), scale = Math.max(1, Math.min(2, Number(values.scale ?? 1) || 1)), format = values.format === "svg" ? "svg" : "png", peopleOpts = {};
   values["people-count"] && (peopleOpts.count = Number(values["people-count"])), values["people-order"] && (peopleOpts.order = values["people-order"]), values.include && (peopleOpts.pin = values.include.split(",").map(cleanHandle2).filter(Boolean)), values.exclude && (peopleOpts.drop = values.exclude.split(",").map(cleanHandle2).filter(Boolean));
   let baseState = {
@@ -16188,7 +16669,7 @@ async function cmdRender(argv) {
     ...values.person ? { person: cleanHandle2(values.person) } : {},
     ...values.title ? { title: values.title } : {},
     ...values.subtitle ? { subtitle: values.subtitle } : {},
-    ...values.line ? { line: values.line } : {},
+    ...values.line || values.text ? { line: values.line ?? values.text } : {},
     ...values.date ? { date: values.date } : {},
     ...values["ring-text"] ? { ringText: values["ring-text"] } : {},
     ...values["full-circle"] ? { fullCircle: !0 } : {},
